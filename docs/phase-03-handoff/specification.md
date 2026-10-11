@@ -27,6 +27,8 @@ Deliver the complete StreamTube Phase 03 backend in this public fork:
 
 The frontend exists, but all video UI work is out of scope.
 
+The implementation must extend the existing NestJS 11 + TypeORM + PostgreSQL 17 backend. It must preserve the global JWT guard, domain exception filters, global `ValidationPipe`, rate-limiting conventions, versioned migrations, seeds, and the existing Swagger/OpenAPI setup. Database schema changes must use migrations; do not enable TypeORM schema synchronization.
+
 ## 3. Sources of truth and precedence
 
 The agent must reconcile these sources before deciding or implementing:
@@ -180,6 +182,7 @@ Secrets and configuration must be documented in `.env.example`; no real secrets 
 - Integration: repositories/migration with real PostgreSQL; real MinIO storage; real queue publication/consumption; a small fixture processed with real FFmpeg.
 - E2E: authentication, upload start/completion, processing through `ready`, thumbnail, unique-URL lookup, partial streaming, download, and primary authorization/error cases.
 - Do not place a 10 GB file in the suite. Demonstrate architectural support for the limit through configuration, validation, and multipart; use small fixtures for reproducibility.
+- In addition to the automated suite, record a reproducible acceptance procedure proving that the configured multipart flow accepts a video at the 10 GB boundary without proxying it through the API. The evidence may use a generated/sparse test object when transferring a real 10 GB fixture is impractical, but it must exercise the same size validation, multipart initiation/completion contracts, and storage constraints used in production code.
 - Do not mock the database, queue, storage, or FFmpeg where the requirement calls for real integration and Compose provides it.
 
 Conventions: `*.spec.ts`, `*.integration-spec.ts`, and `*.e2e-spec.ts`.

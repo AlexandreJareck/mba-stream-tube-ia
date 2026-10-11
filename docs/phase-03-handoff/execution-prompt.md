@@ -31,6 +31,7 @@ Your execution must strictly follow the instructions below.
 8. All communication between containers must use the Compose service name; never use `localhost` internally.
 9. Respect the established layer separation, repository pattern, events/queue usage, and transaction boundaries. Use `auth/` as a structural reference without blindly copying its structure.
 10. Do not directly invoke the reading sub-agents in `.claude/agents/`; they are internal dependencies of the skills. If you are using another tool, reproduce the stage results without pretending that those sub-agents were executed.
+11. Extend the existing NestJS 11 + TypeORM + PostgreSQL 17 backend. Preserve the global JWT guard, domain exception filters, global `ValidationPipe`, rate-limiting conventions, versioned migrations, seeds, and Swagger/OpenAPI setup. Do not enable TypeORM schema synchronization.
 
 ## Mandatory order
 
@@ -76,7 +77,7 @@ You must not begin implementation while `validation.md` is dirty, a decision rem
 - Update `docs/phases/phase-03-videos/progress.md` with real status, files, tests, and evidence.
 - Make small, descriptive commits that follow Git Flow.
 
-You must implement the videos module, migration, S3/MinIO integration, direct multipart/presigned upload, idempotent completion, a real queue, a separate FFmpeg/ffprobe worker, thumbnail generation, metadata extraction, unique URL, Range/206 streaming, download, the state machine, Swagger/OpenAPI contracts, Docker Compose infrastructure, and tests.
+You must implement the videos module, migration, S3/MinIO integration, automatic video pre-registration in `draft` when upload starts, direct multipart/presigned upload, idempotent completion, a real queue, a separate FFmpeg/ffprobe worker, thumbnail generation, metadata extraction, unique URL, Range/206 streaming, download, the state machine, Swagger/OpenAPI contracts, Docker Compose infrastructure, and tests.
 
 Do not pass the file of up to 10 GB through the API, and do not load the full video into memory.
 
@@ -85,6 +86,7 @@ Do not pass the file of up to 10 GB through the API, and do not load the full vi
 - Start the full stack in a clean environment and run migrations.
 - Run `npm test`, `npm run test:e2e`, `npx tsc --noEmit`, and `npm run lint`.
 - Exercise the real MinIO, queue, and worker with a small fixture.
+- Record a reproducible acceptance procedure showing that the production multipart contracts and storage limits accept the 10 GB boundary without proxying the file through the API. A generated/sparse object may be used when a real 10 GB transfer is impractical, but configuration alone is not sufficient evidence.
 - Review every criterion in `docs/phase-03-handoff/specification.md` one by one.
 - Update the root `CLAUDE.md`, `nestjs-project/CLAUDE.md`, and `AGENTS.md`/equivalents only with endpoints, events, services, and behaviors that actually exist.
 - Verify that documentation, plan, progress, code, and tests are consistent.

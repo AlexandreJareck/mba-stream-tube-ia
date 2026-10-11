@@ -6,7 +6,8 @@
  * Call before the ConfigModule factories run (i.e. before compiling modules).
  */
 export function useInternalEndpointForPresignedUrls(): void {
-  process.env.S3_PUBLIC_ENDPOINT = process.env.S3_ENDPOINT ?? 'http://minio:9000';
+  process.env.S3_PUBLIC_ENDPOINT =
+    process.env.S3_ENDPOINT ?? 'http://minio:9000';
 }
 
 /** PUTs a body to a presigned URL the way an external client would. */

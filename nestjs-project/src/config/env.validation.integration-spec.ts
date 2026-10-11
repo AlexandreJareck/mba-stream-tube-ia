@@ -40,7 +40,8 @@ describe('envValidationSchema — SWAGGER_ENABLED', () => {
 
 describe('envValidationSchema — video upload limits', () => {
   it('should apply the 10 GiB and 64 MiB defaults', () => {
-    const { value, error } = validate({});
+    const { error } = validate({});
+    const value = validate({}).value as Record<string, unknown>;
     expect(error).toBeUndefined();
     expect(value.VIDEO_MAX_SIZE_BYTES).toBe(10737418240);
     expect(value.VIDEO_UPLOAD_PART_SIZE_BYTES).toBe(67108864);

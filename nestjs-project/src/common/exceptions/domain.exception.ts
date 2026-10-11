@@ -122,3 +122,13 @@ export class QueueUnavailableException extends DomainException {
     super('QUEUE_UNAVAILABLE', 503, 'Processing queue is unavailable');
   }
 }
+
+export class VideoTooLargeException extends DomainException {
+  constructor(maxSizeBytes: number) {
+    super(
+      'VIDEO_TOO_LARGE',
+      413,
+      `Video exceeds the maximum allowed size of ${maxSizeBytes} bytes`,
+    );
+  }
+}

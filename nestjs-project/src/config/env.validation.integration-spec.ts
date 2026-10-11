@@ -37,3 +37,27 @@ describe('envValidationSchema — SWAGGER_ENABLED', () => {
     expect(value.SWAGGER_ENABLED).toBe('false');
   });
 });
+
+describe('envValidationSchema — video upload limits', () => {
+  it('should apply the 10 GiB and 64 MiB defaults', () => {
+    const { value, error } = validate({});
+    expect(error).toBeUndefined();
+    expect(value.VIDEO_MAX_SIZE_BYTES).toBe(10737418240);
+    expect(value.VIDEO_UPLOAD_PART_SIZE_BYTES).toBe(67108864);
+  });
+
+  it('should reject a part size below the S3 minimum of 5 MiB', () => {
+    const { error } = validate({ VIDEO_UPLOAD_PART_SIZE_BYTES: '1048576' });
+    expect(error!.message).toContain('VIDEO_UPLOAD_PART_SIZE_BYTES');
+  });
+
+  it('should reject a max size above 10 GiB', () => {
+    const { error } = validate({ VIDEO_MAX_SIZE_BYTES: '10737418241' });
+    expect(error!.message).toContain('VIDEO_MAX_SIZE_BYTES');
+  });
+
+  it('should reject an invalid S3 endpoint', () => {
+    const { error } = validate({ S3_ENDPOINT: 'not a url' });
+    expect(error!.message).toContain('S3_ENDPOINT');
+  });
+});

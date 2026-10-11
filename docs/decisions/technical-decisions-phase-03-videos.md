@@ -81,6 +81,9 @@ _Research method (AI-assisted, observable):_ options and APIs were checked again
 **Decision:** A (S3 multipart upload with presigned `UploadPart` URLs)
 **Libraries:** `@aws-sdk/client-s3@^3.x`, `@aws-sdk/s3-request-presigner@^3.x`
 
+**Revisions:**
+- 2026-10-11 — Completion takes no client-supplied ETags: the API reads the authoritative part list with `ListParts` (paginated), requires parts `1..part_count` with the expected sizes, and builds the `CompleteMultipartUpload` part list itself. Rationale: plan-build contract refinement — removes a client-side duty (exposing `ETag` via CORS) and prevents a client from completing with a forged part list; storage stays the source of truth.
+
 ---
 
 ## TD-03: Bucket Layout, Object Keys, Lifecycle and Access Policy
@@ -203,6 +206,9 @@ _Research method (AI-assisted, observable):_ options and APIs were checked again
 
 **Decision:** A (Deterministic `jobId` + compare-and-set updates + retained failed set)
 **Libraries:** `bullmq@^6.3.x`
+
+**Revisions:**
+- 2026-10-11 — `jobId` is `video-process-{videoId}-{processing_run}`, where `processing_run` is a persisted counter incremented on every transition into `processing` (completion = 1, each reprocess +1). Rationale: plan-build contract refinement — failed jobs are retained 7 days as DLQ, and BullMQ would return the retained failed job for a reused id, silently blocking reprocess; the per-run id keeps re-publish of the same run deduplicated while allowing a new run.
 
 ---
 
@@ -354,6 +360,9 @@ _Research method (AI-assisted, observable):_ options and APIs were checked again
 
 **Decision:** A (Public read of `ready` videos by public id; owner-only management by internal id)
 **Libraries:** —
+
+**Revisions:**
+- 2026-10-11 — Owner management routes live under `/channels/me/videos/{id}` (create: `POST /channels/me/videos`) and public routes under `/videos/{publicId}`. Rationale: plan-build contract refinement — both identifiers sit in the same path position, so `/videos/{id}` (owner, authenticated) and `/videos/{publicId}` (public) would collide on one route with different auth rules; `channels/me` expresses "the authenticated user's channel" (`specification.md` §4.1) without touching the global guard.
 
 ---
 

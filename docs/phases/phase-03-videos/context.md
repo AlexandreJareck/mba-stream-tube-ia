@@ -3,7 +3,7 @@ kind: phase
 name: phase-03-videos
 sources_mtime:
   docs/project-plan.md: "2026-09-24T00:15:00-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-10-11T18:27:05-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-10-11T18:30:19-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-10-11T16:50:27-03:00"
   docs/phases/phase-01-configuracao-base/context.md: "2026-10-11T16:50:27-03:00"
   docs/phases/phase-02-auth/context.md: "2026-10-11T16:50:27-03:00"
@@ -54,15 +54,18 @@ sources_mtime:
 |-----|--------|-------|-------|--------|----------|-----------|
 | phase-03-videos/TD-01 | phase | Backend | Processing Queue Technology and NestJS Integration | decided | A (BullMQ + Redis via `@nestjs/bullmq`) | `bullmq@^6.3.x`, `@nestjs/bullmq@^12.0.x`, `ioredis` (transitive via bullmq) |
 | phase-03-videos/TD-02 | phase | Cross-layer | Direct Upload Protocol for Files up to 10 GB | decided | A (S3 multipart upload with presigned `UploadPart` URLs) | `@aws-sdk/client-s3@^3.x`, `@aws-sdk/s3-request-presigner@^3.x` |
+|  └─ Last revision: 2026-10-11 (plan-build contract refinement) | | | | | | |
 | phase-03-videos/TD-03 | phase | Backend | Bucket Layout, Object Keys, Lifecycle and Access Policy | decided | A (Single private bucket, prefix-per-video keys, app-level cleanup) | `@aws-sdk/client-s3@^3.x` |
 | phase-03-videos/TD-04 | phase | Backend | Worker Execution Model and FFmpeg/ffprobe Usage | decided | A (NestJS standalone worker + direct `ffprobe`/`ffmpeg` via `child_process`) | — |
 | phase-03-videos/TD-05 | phase | Backend | Processing Message Format, Versioning and Delivery Guarantees | decided | A (`video.process` v1 claim-check `{ version: 1, videoId }`, at-least-once) | `bullmq@^6.3.x` |
 | phase-03-videos/TD-06 | phase | Backend | Idempotency, Retries, Backoff and Permanently Failed Jobs | decided | A (Deterministic `jobId` + compare-and-set updates + retained failed set) | `bullmq@^6.3.x` |
+|  └─ Last revision: 2026-10-11 (plan-build contract refinement) | | | | | | |
 | phase-03-videos/TD-07 | phase | Cross-layer | Unique Public Video Identifier | decided | A (11-char base64url from `crypto.randomBytes(8)` + unique index + retry) | — |
 | phase-03-videos/TD-08 | phase | Cross-layer | Streaming and Download Delivery (Range/206) | decided | A (API streaming proxy with validated Range) | `@aws-sdk/client-s3@^3.x` |
 | phase-03-videos/TD-09 | phase | Backend | Video Status State Machine and Failure Recovery | decided | A (Explicit transition table + compare-and-set updates, reprocess from `failed`) | — |
 | phase-03-videos/TD-10 | phase | Cross-layer | Upload Limits, Validation and Abuse Controls | decided | A (Declared metadata + completion verification + ffprobe validation; per-route throttling) | `@nestjs/throttler@^6.x` (inherited) |
 | phase-03-videos/TD-11 | phase | Cross-layer | Video Access Authorization | decided | A (Public read of `ready` videos by public id; owner-only management by internal id) | — |
+|  └─ Last revision: 2026-10-11 (plan-build contract refinement) | | | | | | |
 
 _Source files:_
 
@@ -96,6 +99,9 @@ _Source files:_
 
 **Libraries:** `@aws-sdk/client-s3@^3.x`, `@aws-sdk/s3-request-presigner@^3.x`
 
+**Revisions:**
+- 2026-10-11 — Completion takes no client-supplied ETags: the API reads the authoritative part list with `ListParts` (paginated), requires parts `1..part_count` with the expected sizes, and builds the `CompleteMultipartUpload` part list itself. Rationale: plan-build contract refinement — removes a client-side duty (exposing `ETag` via CORS) and prevents a client from completing with a forged part list; storage stays the source of truth.
+
 ### phase-03-videos/TD-03
 
 **Recommendation:** single private bucket, prefix-per-video, app-level cleanup — minimal provisioning, no 10 GB copies, deterministic keys for idempotency, and abandoned uploads become a visible state transition instead of silent storage garbage.
@@ -121,6 +127,9 @@ _Source files:_
 **Recommendation:** deterministic `jobId` + conditional updates + retained failed set — gives the required idempotency for double completion, redelivery and worker restarts with native primitives; the non-atomic gap is closed by the idempotent re-publish on repeated completion and by reprocess.
 
 **Libraries:** `bullmq@^6.3.x`
+
+**Revisions:**
+- 2026-10-11 — `jobId` is `video-process-{videoId}-{processing_run}`, where `processing_run` is a persisted counter incremented on every transition into `processing` (completion = 1, each reprocess +1). Rationale: plan-build contract refinement — failed jobs are retained 7 days as DLQ, and BullMQ would return the retained failed job for a reused id, silently blocking reprocess; the per-run id keeps re-publish of the same run deduplicated while allowing a new run.
 
 ### phase-03-videos/TD-07
 
@@ -155,6 +164,9 @@ _Source files:_
 **Recommendation:** public read of ready videos, owner-only management by UUID — honors anonymous viewing, keeps non-ready videos private, and requires no changes to the inherited global guard; Phase 04 layers visibility on top.
 
 **Libraries:** —
+
+**Revisions:**
+- 2026-10-11 — Owner management routes live under `/channels/me/videos/{id}` (create: `POST /channels/me/videos`) and public routes under `/videos/{publicId}`. Rationale: plan-build contract refinement — both identifiers sit in the same path position, so `/videos/{id}` (owner, authenticated) and `/videos/{publicId}` (public) would collide on one route with different auth rules; `channels/me` expresses "the authenticated user's channel" (`specification.md` §4.1) without touching the global guard.
 
 ## Inherited Decisions Detail
 

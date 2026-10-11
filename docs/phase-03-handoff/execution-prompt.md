@@ -1,109 +1,112 @@
-# Prompt de execução — Fase 03 do StreamTube
+# Execution Prompt — StreamTube Phase 03
 
-Você é o agente responsável por planejar e implementar integralmente a Fase 03 — Upload e Processamento de Vídeos — deste repositório.
+You are the agent responsible for fully planning and implementing Phase 03 — Video Upload and Processing — in this repository.
 
-Leia primeiro, por inteiro:
+First, read all of the following in full:
 
 - `docs/phase-03-handoff/specification.md`;
 - `CLAUDE.md`;
 - `docs/project-plan.md`;
 - `docs/diagrams/software-arch.mermaid`;
-- os artefatos de `docs/phases/phase-02-auth/`;
-- os documentos de decisão existentes;
-- as skills e rules em `.claude/`.
+- the artifacts in `docs/phases/phase-02-auth/`;
+- the existing decision documents;
+- the skills, rules, and agent definitions in `.claude/`;
+- `nestjs-project/CLAUDE.md`.
 
-Sua execução deve seguir rigorosamente as instruções abaixo.
+Your execution must strictly follow the instructions below.
 
-## Regras de trabalho
+## Working rules
 
-1. Não implemente diretamente em `main`. Atualize `dev` e crie uma branch `feature/phase-03-videos` a partir dela.
-2. Preserve alterações preexistentes do usuário. Antes de editar, verifique branch, remotes e working tree.
-3. Se estiver usando OpenAI Codex, antes do planejamento porte a fundação de IA do projeto:
-   - traduza as instruções relevantes de `CLAUDE.md` para um `AGENTS.md` compatível, sem remover `CLAUDE.md`;
-   - mapeie as skills/rules do workflow para skills ou instruções equivalentes do Codex; quando não houver equivalente, execute o mesmo estágio manualmente;
-   - configure ou documente os MCPs equivalentes para PostgreSQL e Context7;
-   - registre claramente o mapeamento realizado. Não alegue que uma skill foi executada se o mecanismo não existia; produza manualmente o artefato contratado.
-4. Use IA como ferramenta principal e mantenha sua participação observável nos artefatos de decisões, planejamento e progresso.
-5. Toda decisão, contrato ou comportamento deve ser rastreável ao enunciado, ao código existente, a documentação oficial ou a uma decisão registrada.
-6. Antes de usar bibliotecas novas, identifique as versões compatíveis e consulte a documentação oficial via Context7. Registre as referências em `library-refs.md`.
-7. Reuse padrões das Fases 01 e 02. Não reescreva auth, users ou channels.
-8. Toda comunicação entre containers usa o nome do serviço Compose; nunca use `localhost` internamente.
+1. Do not implement directly on `main`. Update `dev` and create a `feature/phase-03-videos` branch from it.
+2. Preserve the user's pre-existing changes. Before editing, inspect the branch, remotes, and working tree.
+3. If you are using OpenAI Codex, port the project's AI foundation before planning:
+   - translate the relevant instructions from `CLAUDE.md` into a compatible `AGENTS.md`, without removing `CLAUDE.md`;
+   - map the workflow skills/rules to equivalent Codex skills or instructions; when no equivalent exists, perform the same stage manually;
+   - configure or document equivalent MCPs for PostgreSQL and Context7;
+   - clearly record the mapping performed. Do not claim that a skill was executed if the mechanism did not exist; manually produce the contracted artifact.
+4. Use AI as the primary production tool and keep its participation observable in the decision, planning, and progress artifacts. Critically review every output and refine the instruction/prompt when it is shallow, inconsistent, or lacks traceability.
+5. Every decision, contract, or behavior must be traceable to the assignment, existing code, official documentation, or a recorded decision.
+6. Before using new libraries, identify compatible versions and consult the official documentation through Context7. Record the references in `library-refs.md`.
+7. Reuse the patterns from Phases 01 and 02. Do not rewrite auth, users, or channels.
+8. All communication between containers must use the Compose service name; never use `localhost` internally.
+9. Respect the established layer separation, repository pattern, events/queue usage, and transaction boundaries. Use `auth/` as a structural reference without blindly copying its structure.
+10. Do not directly invoke the reading sub-agents in `.claude/agents/`; they are internal dependencies of the skills. If you are using another tool, reproduce the stage results without pretending that those sub-agents were executed.
 
-## Ordem obrigatória
+## Mandatory order
 
-### Etapa 0 — Baseline
+### Stage 0 — Baseline
 
-- Inspecione o repositório e as instruções locais.
-- Suba o backend atual com Docker Compose, instale dependências e rode migrations.
-- Execute a suíte existente, typecheck e lint.
-- Registre falhas preexistentes separadamente; não as esconda e não misture correções fora do escopo.
+- Inspect the repository and its local instructions.
+- Start the current backend with Docker Compose, install dependencies, and run migrations.
+- Run the existing test suite, typecheck, and lint.
+- Record pre-existing failures separately; do not hide them or mix out-of-scope fixes into this work.
 
-### Etapa 1 — Research
+### Stage 1 — Research
 
-Pesquise as decisões abertas exigidas em `docs/phase-03-handoff/specification.md`, especialmente fila, multipart presigned upload, worker/FFmpeg, mensagens/idempotência, streaming Range/206, URL única e ciclo de status.
+Research the open decisions required by `docs/phase-03-handoff/specification.md`, especially the queue, multipart presigned upload, worker/FFmpeg, messages/idempotency, Range/206 streaming, unique URL, and status lifecycle.
 
-Produza `docs/decisions/technical-decisions-phase-03-videos.md` no formato já usado pelo projeto. Para cada decisão, mostre opções, trade-offs, recomendação, consequências, bibliotecas e fontes oficiais.
+Produce `docs/decisions/technical-decisions-phase-03-videos.md` using the format already established in the project. For every decision, present the options, trade-offs, recommendation, consequences, libraries, and official sources.
 
-MinIO/S3-compatible é uma restrição dada, não uma decisão aberta.
+S3-compatible storage with MinIO is a given constraint, not an open decision.
 
-Pare e revise criticamente o documento antes de avançar. Não implemente nesta etapa.
+Stop and critically review the document before moving forward. Do not implement anything during this stage.
 
-### Etapa 2 — Pipeline de planejamento
+### Stage 2 — Planning pipeline
 
-Execute na ordem:
+Execute in this order:
 
 1. `plan-context` → `docs/phases/phase-03-videos/context.md`;
 2. `plan-validate` → `validation.md`;
-3. `plan-resolve` → resolva todas as pendências, atualize decisões/contexto e produza `library-refs.md`;
-4. repita `plan-validate ↔ plan-resolve` até `validation.md` terminar com `status: clean` e zero issues;
+3. `plan-resolve` → resolve every pending issue, update the decisions/context, and produce `library-refs.md`;
+4. repeat `plan-validate ↔ plan-resolve` until `validation.md` ends with `status: clean` and zero issues;
 5. `plan-build` → `phase-03-videos.md`;
-6. gere specs de teste se a skill estiver disponível.
+6. generate test specifications if the corresponding skill is available.
 
-O plano final deve conter SIs `SI-03.x`, Data Model, API Contracts, Authorization Matrix, Error Catalog, Events/Messages, Dependency Map, Deliverables, testes e critérios de aceite. Valide rastreabilidade contra cada requisito da especificação.
+The final plan must contain `SI-03.x` SIs, Data Model, API Contracts, Authorization Matrix, Error Catalog, Events/Messages, Dependency Map, Deliverables, tests, and acceptance criteria. Include the Swagger/OpenAPI contract update in the applicable SIs. Validate traceability against every requirement in the specification.
 
-É proibido iniciar a implementação com `validation.md` dirty, decisão aberta ou contrato ambíguo.
+You must not begin implementation while `validation.md` is dirty, a decision remains open, or a contract is ambiguous.
 
-### Etapa 3 — Implementação SI a SI
+### Stage 3 — SI-by-SI implementation
 
-- Siga a ordem do Dependency Map.
-- Antes de cada SI, confirme dependências e critérios de aceite.
-- Implemente apenas o escopo daquela SI.
-- Rode testes relevantes, typecheck e lint proporcionais à alteração.
-- Corrija a causa de qualquer falha antes de avançar.
-- Atualize `docs/phases/phase-03-videos/progress.md` com status, arquivos, testes e evidências reais.
-- Faça commits pequenos e descritivos, seguindo Git Flow.
+- Follow the Dependency Map order.
+- Before each SI, confirm its dependencies and acceptance criteria.
+- Implement only that SI's scope.
+- Run the relevant tests, typecheck, and lint in proportion to the change.
+- Fix the cause of every failure before moving forward.
+- Update `docs/phases/phase-03-videos/progress.md` with real status, files, tests, and evidence.
+- Make small, descriptive commits that follow Git Flow.
 
-Implemente obrigatoriamente o módulo de vídeos, migration, integração S3/MinIO, upload direto multipart/presigned, conclusão idempotente, fila real, worker separado com FFmpeg/ffprobe, thumbnail, metadados, URL única, streaming Range/206, download, máquina de estados, infraestrutura Compose e testes.
+You must implement the videos module, migration, S3/MinIO integration, direct multipart/presigned upload, idempotent completion, a real queue, a separate FFmpeg/ffprobe worker, thumbnail generation, metadata extraction, unique URL, Range/206 streaming, download, the state machine, Swagger/OpenAPI contracts, Docker Compose infrastructure, and tests.
 
-Não passe o arquivo de até 10 GB pela API e não carregue o vídeo completo em memória.
+Do not pass the file of up to 10 GB through the API, and do not load the full video into memory.
 
-### Etapa 4 — Fechamento
+### Stage 4 — Completion
 
-- Suba a stack completa em ambiente limpo e rode migrations.
-- Execute `npm test`, `npm run test:e2e`, `npx tsc --noEmit` e `npm run lint`.
-- Exercite MinIO, fila e worker reais com fixture pequena.
-- Revise todos os critérios de `docs/phase-03-handoff/specification.md` um a um.
-- Atualize `CLAUDE.md` e `AGENTS.md` apenas com endpoints, eventos, serviços e comportamentos que realmente existam.
-- Verifique que documentação, plano, progresso, código e testes são coerentes.
+- Start the full stack in a clean environment and run migrations.
+- Run `npm test`, `npm run test:e2e`, `npx tsc --noEmit`, and `npm run lint`.
+- Exercise the real MinIO, queue, and worker with a small fixture.
+- Review every criterion in `docs/phase-03-handoff/specification.md` one by one.
+- Update the root `CLAUDE.md`, `nestjs-project/CLAUDE.md`, and `AGENTS.md`/equivalents only with endpoints, events, services, and behaviors that actually exist.
+- Verify that documentation, plan, progress, code, and tests are consistent.
 
-## Política de bloqueio
+## Blocking policy
 
-Se encontrar uma decisão que altere materialmente o produto e não possa ser resolvida pelas fontes ou pelo research, registre a questão e peça orientação. Não escolha silenciosamente.
+If you find a decision that materially changes the product and cannot be resolved from the sources or research, record the question and ask for guidance. Do not choose silently.
 
-Se Docker, documentação oficial ou infraestrutura externa estiver indisponível, esgote diagnósticos seguros, registre a evidência e informe a limitação. Não marque a fase como concluída enquanto a Definition of Done não passar.
+If Docker, official documentation, or external infrastructure is unavailable, exhaust safe diagnostics, record the evidence, and report the limitation. Do not mark the phase complete while the Definition of Done has not passed.
 
-## Formato do relatório final
+## Final report format
 
-Informe de forma objetiva:
+Report objectively:
 
-1. branch e commits;
-2. decisões técnicas principais;
-3. artefatos criados/atualizados;
-4. SIs concluídas;
-5. endpoints, eventos e serviços adicionados;
-6. migration e modelo de dados;
-7. resultados exatos de testes, e2e, typecheck e lint;
-8. como reproduzir o fluxo de upload/processamento/streaming/download;
-9. limitações ou pendências reais.
+1. branch and commits;
+2. main technical decisions;
+3. artifacts created/updated;
+4. completed SIs;
+5. endpoints, events, and services added;
+6. migration and data model;
+7. exact results for tests, e2e, typecheck, and lint;
+8. how to reproduce the upload/processing/streaming/download flow;
+9. real limitations or pending items.
 
-Não declare conclusão parcial como sucesso total.
+Do not present partial completion as full success.

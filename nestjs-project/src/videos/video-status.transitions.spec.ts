@@ -19,9 +19,7 @@ describe('video status transitions', () => {
   const statuses = Object.values(VideoStatus);
   const forbidden = statuses
     .flatMap((from) => statuses.map((to) => [from, to] as const))
-    .filter(
-      ([from, to]) => !allowed.some(([f, t]) => f === from && t === to),
-    );
+    .filter(([from, to]) => !allowed.some(([f, t]) => f === from && t === to));
 
   it.each(forbidden)('should reject %s → %s', (from, to) => {
     expect(canTransition(from, to)).toBe(false);

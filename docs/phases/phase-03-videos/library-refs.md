@@ -5,8 +5,12 @@ libs:
     context7_id: "/taskforcesh/bullmq"
     fetched_at: "2026-10-11T18:27:44-03:00"
   "@nestjs/bullmq":
-    version: "^12.0.0"
+    version: "^11.0.5"
     context7_id: "/taskforcesh/bullmq (guide/nestjs) + /nestjs/docs.nestjs.com (application/queues)"
+    fetched_at: "2026-10-11T18:27:44-03:00"
+  "ioredis":
+    version: "^5.11.1"
+    context7_id: "peer of /taskforcesh/bullmq (redis-connection)"
     fetched_at: "2026-10-11T18:27:44-03:00"
   "@aws-sdk/client-s3":
     version: "^3.1149.0"
@@ -40,8 +44,8 @@ sources_mtime:
 
 | Package | Latest (npm view) | Peer constraints | Compatible with project? |
 |---|---|---|---|
-| `@nestjs/bullmq` | 12.0.0 | `@nestjs/common`/`core` `^10 \|\| ^11 \|\| ^12`, `bullmq ^3–^6` | Yes (Nest 11.x installed) |
-| `bullmq` | 6.3.12 | `ioredis >=5` (bundled dependency) | Yes |
+| `@nestjs/bullmq` | 12.0.0 (ESM-only) → **11.0.5 used** | 11.0.5: `@nestjs/common`/`core` `^10 \|\| ^11`, `bullmq ^3–^6`; CommonJS | 12.x rejected: ESM-only, incompatible with the CommonJS toolchain (found in SI-03.10) |
+| `bullmq` | 6.3.12 | optional peer `ioredis >=5` (**not bundled** — installed explicitly as `ioredis@^5.11.1`, found in SI-03.10) | Yes |
 | `@aws-sdk/client-s3` | 3.1149.0 | none | Yes (Node ≥ 18; container Node 25) |
 | `@aws-sdk/s3-request-presigner` | 3.1149.0 | none | Yes — must match client-s3 minor |
 | `fluent-ffmpeg` | 2.1.3 — **deprecated** (npm `deprecated` field, 2025-05-22) | — | Rejected (TD-04 Option B) |

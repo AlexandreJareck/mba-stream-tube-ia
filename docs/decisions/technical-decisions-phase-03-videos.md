@@ -47,7 +47,11 @@ _Research method (AI-assisted, observable):_ options and APIs were checked again
 **Recommendation:** **Option A (BullMQ + Redis via `@nestjs/bullmq`)** — it is the queue the project's own best-practices skill prescribes, has first-class Nest 11 support and covers retries, deduplication by `jobId`, stalled-job recovery and failed-job retention natively; the non-atomic enqueue is closed by the idempotent completion/re-publish design in TD-06.
 
 **Decision:** A (BullMQ + Redis via `@nestjs/bullmq`)
-**Libraries:** `bullmq@^6.3.x`, `@nestjs/bullmq@^12.0.x`, `ioredis` (transitive via bullmq)
+**Libraries:** `bullmq@^6.3.x`, `@nestjs/bullmq@^11.0.5`, `ioredis@^5.11.1`
+
+**Revisions:**
+- 2026-10-11 — `@nestjs/bullmq` pinned to `^11.0.5` instead of `^12.0.0`. Rationale: implementation finding (SI-03.10) — `@nestjs/bullmq@12.0.0` is published as ESM-only (`"type": "module"`), which the project's CommonJS Nest/ts-jest toolchain cannot load; `11.0.5` is CommonJS and its peer range already covers `bullmq ^6` and Nest 11.
+- 2026-10-11 — `ioredis@^5.11.1` added as a direct dependency. Rationale: implementation finding (SI-03.10) — in `bullmq@6` the Redis client is an optional peer dependency (`ioredis >=5`), not bundled; BullMQ fails at startup without it.
 
 ---
 

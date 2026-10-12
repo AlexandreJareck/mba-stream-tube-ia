@@ -99,3 +99,9 @@ sources_mtime:
 - `NestFactory.createApplicationContext(WorkerModule)` — standalone app (no HTTP listener) for the worker; `app.enableShutdownHooks()`.
 - `@SkipThrottle()` from `@nestjs/throttler` exempts a route from the global `ThrottlerGuard` (inherited TD-08).
 - RFC 9110 §14: `Range: bytes=a-b | a- | -n`; `206` + `Content-Range: bytes a-b/size`; unsatisfiable → `416` + `Content-Range: bytes */size`; multiple ranges may be ignored (serve `200` full or first range).
+
+## Retrospective remediation verification — 2026-10-12
+
+The repository declares the Context7 MCP server in `.mcp.json`, but it was not exposed to this execution session: MCP resource and resource-template discovery returned no `context7` server, and the available tool registry contained no Context7 tool. Per the remediation contract, no web search or direct Context7 HTTP request was substituted.
+
+Therefore the required retrospective MCP verification remains **incomplete**. The intended library IDs/topics are `/taskforcesh/bullmq` (NestJS integration, `Queue.getJob`, job states, deterministic `jobId`, retries/backoff, retention, `upsertJobScheduler`), `/aws/aws-sdk-js-v3` (multipart commands and `getSignedUrl`), and `/nestjs/docs.nestjs.com` (standalone application context and shutdown lifecycle), against installed `@nestjs/bullmq@^11.0.5`, `bullmq@^6.3.12`, `ioredis@^5.11.1`, and AWS SDK `@^3.1149.0`. These are targets, not a claim that MCP consultation occurred in this remediation run.

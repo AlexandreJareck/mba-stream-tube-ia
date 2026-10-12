@@ -194,7 +194,7 @@ _Research method (AI-assisted, observable):_ options and APIs were checked again
 ### Option A: BullMQ-native — deterministic `jobId`, conditional state updates, failed set as DLQ
 - Completion: conditional `UPDATE ... SET status='processing' WHERE id=:id AND status='draft'`; if the video is already `processing`/`ready`, the call returns the current state (idempotent) and re-adds the job with `jobId = video-process-{videoId}` (BullMQ ignores an add whose `jobId` already exists, so re-publish repairs a lost enqueue without duplicates). Worker: `attempts: 3`, exponential backoff starting at 10 s; invalid media throws `UnrecoverableError` (no retries); final failure handler sets `failed` with an internal `failure_reason`; failed jobs are retained (`removeOnFail` by age, 7 days) as the dead-letter set. Worker writes are idempotent (deterministic thumbnail key overwrite; final `UPDATE ... WHERE status='processing'`).
 - **Pros:** No extra tables/queues; duplicate completions and redeliveries are harmless; failed jobs inspectable.
-- **Cons:** DLQ is the failed set of the same queue (not a separate queue); a crash between DB update and enqueue is repaired only when completion is called again or by reprocess (TD-09).
+- **Cons:** DLQ is the failed set of the same queue (not a separate queue); PostgreSQL and Redis still are not updated atomically, so a periodic reconciliation is required.
 
 ### Option B: Transactional outbox table + relay
 - Completion writes an `outbox` row in the same transaction; a relay publishes to the queue.
@@ -206,13 +206,14 @@ _Research method (AI-assisted, observable):_ options and APIs were checked again
 - **Pros:** Explicit DLQ consumer possible.
 - **Cons:** Custom move logic; duplicates what the failed set already provides.
 
-**Recommendation:** **Option A (deterministic `jobId` + conditional updates + retained failed set)** — gives the required idempotency for double completion, redelivery and worker restarts with native primitives; the non-atomic gap is closed by the idempotent re-publish on repeated completion and by reprocess.
+**Recommendation:** **Option A (deterministic `jobId` + conditional updates + retained failed set)** — gives the required idempotency for double completion, redelivery and worker restarts with native primitives; the non-atomic gap is closed by idempotent API republication and a periodic worker-side reconciliation.
 
 **Decision:** A (Deterministic `jobId` + compare-and-set updates + retained failed set)
 **Libraries:** `bullmq@^6.3.x`
 
 **Revisions:**
 - 2026-10-11 — `jobId` is `video-process-{videoId}-{processing_run}`, where `processing_run` is a persisted counter incremented on every transition into `processing` (completion = 1, each reprocess +1). Rationale: plan-build contract refinement — failed jobs are retained 7 days as DLQ, and BullMQ would return the retained failed job for a reused id, silently blocking reprocess; the per-run id keeps re-publish of the same run deduplicated while allowing a new run.
+- 2026-10-12 — remediation adds scheduled `processing.reconcile` in the worker. It scans current `processing` rows in bounded pages, republishes a missing deterministic job, leaves pending states alone and CAS-marks terminal current-run jobs as `failed/PROCESSING_FAILED`. This closes enqueue-loss and failed-event crash windows without an outbox or cross-system transaction.
 
 ---
 
@@ -300,7 +301,7 @@ _Research method (AI-assisted, observable):_ options and APIs were checked again
 ### Option C: Free-form status updates
 - **Cons:** No protection against invalid or racing transitions.
 
-**Recommendation:** **Option A (transition table + compare-and-set updates, reprocess from `failed`)** — minimal, race-free and directly testable; reprocess gives a recovery path for transient permanent failures.
+**Recommendation:** **Option A (transition table + compare-and-set updates, idempotent reprocess/republication)** — minimal, race-safe and directly testable; a failed row starts one new run, while an already-processing row republishes its current deterministic job.
 
 **Decision:** A (Explicit transition table + compare-and-set updates, reprocess from `failed`)
 **Libraries:** —

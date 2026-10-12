@@ -214,7 +214,7 @@ Entregar o backend da Fase 03: armazenamento S3/MinIO de vídeos e thumbnails, f
 
 1. Criar `src/videos/videos.repository.ts` (injeta `Repository<Video>`): `insertDraft(data)` com retry ao detectar `23505` em `public_id` (máx. 5) (per `phase-03-videos/TD-07`, `phase-02-auth/TD-10`)
 2. Implementar `transition(id, from, to, patch)` — `UPDATE … WHERE id AND status = from` retornando se aplicou; incremento atômico de `processing_run` nas entradas em `processing` (per `phase-03-videos/TD-09`, `phase-03-videos/TD-06`)
-3. Implementar consultas `findOwned(id, channelId)`, `findReadyByPublicId(publicId)`, `findExpiredDrafts(now, limit)`
+3. Implementar consultas `findOwned(id, channelId)`, `findReadyByPublicId(publicId)`, `findExpiredDrafts(now, limit)` e `findProcessing(limit, afterId)` para reconciliação paginada
 4. Criar `src/videos/videos.module.ts` (imports `TypeOrmModule.forFeature([Video])`, `ChannelsModule`, `StorageModule`) e registrá-lo em `AppModule`
 
 **Tests:**
@@ -222,7 +222,7 @@ Entregar o backend da Fase 03: armazenamento S3/MinIO de vídeos e thumbnails, f
 | Artifact | Layer | Test file |
 |----------|-------|-----------|
 | `VideosRepository` | Integration: retry de colisão (gerador forçado), CAS aceito/rejeitado, CAS concorrente (só um vence), `findExpiredDrafts` | `src/videos/videos.repository.integration-spec.ts` |
-| `VideosModule` | Unit: compilação | `src/videos/videos.module.spec.ts` |
+| `VideosModule` | Integração: compilação com PostgreSQL/Redis/MinIO reais | `src/videos/videos.module.integration-spec.ts` |
 
 **Dependencies:** SI-03.4, SI-03.5, SI-03.6, SI-03.7
 
@@ -347,7 +347,7 @@ Entregar o backend da Fase 03: armazenamento S3/MinIO de vídeos e thumbnails, f
 |----------|-------|-----------|
 | `VideoProcessingService` | Unit: ignora status/run divergente, falha de probe propaga, limpeza do temp | `src/videos/processing/video-processing.service.spec.ts` |
 | Worker end-to-end | Integration (DB + MinIO + Redis + FFmpeg reais): fixture enviada, job publicado, `WorkerModule` processa até `ready` com thumbnail no bucket; arquivo inválido ⇒ `failed/INVALID_MEDIA` sem retries | `src/videos/processing/video-processing.integration-spec.ts` |
-| `WorkerModule` | Unit: compilação | `src/worker/worker.module.spec.ts` |
+| `WorkerModule` | Integração: compilação com PostgreSQL/Redis/MinIO reais | `src/worker/worker.module.integration-spec.ts` |
 
 **Dependencies:** SI-03.10, SI-03.11
 
@@ -366,19 +366,19 @@ Entregar o backend da Fase 03: armazenamento S3/MinIO de vídeos e thumbnails, f
 **Test Specs:** see `nestjs-project/specs/videos-owner.plan.md`
 **Authorization:** Owner
 
-**Description:** Permite ao dono acompanhar o status (polling) e recuperar vídeos `failed` (`phase-03-videos/TD-09`).
+**Description:** Permite ao dono acompanhar o status (polling), iniciar um novo run para vídeos `failed` e recuperar de publicação perdida republicando idempotentemente um vídeo já `processing` (`phase-03-videos/TD-09`).
 
 **Technical actions:**
 
 1. Criar `src/videos/dto/video-response.dto.ts` (`@ApiProperty` em todos os campos, `failure_reason` apenas código) (per `openapi-docs-nestjs/TD-01`)
-2. Implementar `VideosService.findOwned(userId, id)` e `VideosService.reprocess(userId, id)` (`failed` + `headObject` existente ⇒ CAS `failed → processing` com `processing_run + 1` ⇒ publica job; senão `INVALID_VIDEO_STATUS`/`VIDEO_SOURCE_MISSING`) (per `phase-03-videos/TD-09`, `phase-03-videos/TD-06`)
+2. Implementar `VideosService.findOwned(userId, id)` e `VideosService.reprocess(userId, id)` (`failed` + `headObject` existente ⇒ CAS `failed → processing` com `processing_run + 1`; `processing` ⇒ republica o run atual; corridas recarregam e convergem no mesmo run/job; demais estados ⇒ `INVALID_VIDEO_STATUS`) (per `phase-03-videos/TD-09`, `phase-03-videos/TD-06`)
 3. Adicionar as rotas ao `ChannelVideosController` com `@ApiResponse` 200/400/401/404/409/503
 
 **Tests:**
 
 | Artifact | Layer | Test file |
 |----------|-------|-----------|
-| `VideosService.reprocess` | Unit: não-failed, fonte ausente, sucesso incrementa run | `src/videos/videos.service.spec.ts` |
+| `VideosService.reprocess` | Unit/e2e: status inválido, fonte ausente, falha de enqueue + retry, corrida concorrente e republicação sem incremento | `src/videos/videos.service.spec.ts`, `test/videos-owner.e2e-spec.ts` |
 
 **Dependencies:** SI-03.10
 
@@ -387,6 +387,7 @@ Entregar o backend da Fase 03: armazenamento S3/MinIO de vídeos e thumbnails, f
 - `GET /channels/me/videos/{id}` do dono retorna `200` com o status atual (inclusive `draft`/`processing`)
 - O mesmo `GET` por outro usuário retorna `404` `VIDEO_NOT_FOUND`
 - `POST …/reprocess` em vídeo `failed` com fonte presente retorna `200` `status: "processing"` e `processing_run` incrementado, publicando `video-process-{id}-{run}`
+- Repetir após falha de enqueue, ou chamar enquanto já `processing`, republica o mesmo `processing_run`/`jobId`; chamadas concorrentes incrementam no máximo uma vez
 - `POST …/reprocess` em vídeo `ready` retorna `409` `INVALID_VIDEO_STATUS`
 
 ---
@@ -579,6 +580,7 @@ Entregar o backend da Fase 03: armazenamento S3/MinIO de vídeos e thumbnails, f
 | `draft` | `failed` | sweeper (sessão expirada) | `upload_expires_at < now()`; `failure_reason = UPLOAD_EXPIRED` |
 | `processing` | `ready` | worker sucesso | `processing_run` do job == run atual |
 | `processing` | `failed` | worker falha final (`attempts` esgotados ou `UnrecoverableError`) | `processing_run` do job == run atual |
+| `processing` | `failed` | reconciliador encontra job atual terminal (`failed` ou `completed` sem transição persistida) | CAS inclui `status = processing` e `processing_run` atual; `failure_reason = PROCESSING_FAILED` |
 | `failed` | `processing` | `POST /channels/me/videos/{id}/reprocess` | objeto fonte existe (`HeadObject`); `processing_run += 1` |
 
 Toda transição é um `UPDATE … WHERE id = :id AND status = :from` (compare-and-set); 0 linhas afetadas ⇒ transição rejeitada (`INVALID_VIDEO_STATUS`) ou no-op idempotente conforme o caso.
@@ -646,6 +648,7 @@ Convenções herdadas: envelope de erro `{ statusCode, error, message }` (`phase
 **Response 200:** `VideoResponseDto` com `status: "processing"` (ou o estado atual quando já `processing`/`ready` — idempotente; nesse caso o job do run atual é re-publicado com o mesmo `jobId`)
 
 **Error responses:**
+- 400 VALIDATION_ERROR: `id` não é UUID
 - 401
 - 404 VIDEO_NOT_FOUND
 - 409 INVALID_VIDEO_STATUS: vídeo `failed`
@@ -671,9 +674,9 @@ Convenções herdadas: envelope de erro `{ statusCode, error, message }` (`phase
 
 **Request headers:** Authorization: Bearer {access_token}
 
-**Response 200:** `VideoResponseDto` com `status: "processing"` e `processing_run` incrementado
+**Response 200:** `VideoResponseDto` com `status: "processing"`; `processing_run` incrementa somente na entrada a partir de `failed`. Se já estiver `processing`, o mesmo job determinístico é republicado sem novo run.
 
-**Error responses:** 401, 404 VIDEO_NOT_FOUND, 409 INVALID_VIDEO_STATUS (não está `failed`), 409 VIDEO_SOURCE_MISSING (objeto fonte ausente), 503 QUEUE_UNAVAILABLE
+**Error responses:** 400 VALIDATION_ERROR (id não-UUID), 401, 404 VIDEO_NOT_FOUND, 409 INVALID_VIDEO_STATUS (não está `failed` nem `processing`), 409 VIDEO_SOURCE_MISSING (objeto fonte ausente), 503 QUEUE_UNAVAILABLE. Após 503, repetir a chamada repara a publicação perdida usando o mesmo `processing_run`.
 
 ---
 
@@ -771,7 +774,7 @@ Códigos internos de falha persistidos em `videos.failure_reason` (não são res
 
 **Producer:** `VideoProcessingQueue` (API — `VideosService.completeUpload` e `reprocess`) (per `phase-03-videos/TD-01`, `phase-03-videos/TD-05`)
 **Consumer:** `VideoProcessingProcessor` → `VideoProcessingService` no contêiner `worker` (per `phase-03-videos/TD-04`)
-**Trigger:** transição `draft → processing` (completar upload) ou `failed → processing` (reprocess); re-publicado quando completar é chamado de novo para um vídeo já `processing`
+**Trigger:** transição `draft → processing` (completar upload) ou `failed → processing` (reprocess); re-publicado quando completar/reprocessar é chamado de novo para um vídeo já `processing`, ou quando a reconciliação detecta job ausente
 **Job options:** `jobId = video-process-{videoId}-{processingRun}` (deduplicação), `attempts: 3`, `backoff: { type: 'exponential', delay: 10000 }`, `removeOnComplete: { age: 86400 }`, `removeOnFail: { age: 604800 }` (failed set = DLQ por 7 dias) (per `phase-03-videos/TD-06`)
 **Idempotency:** consumidor recarrega o vídeo; ignora (completa sem efeito) se `status != processing` ou `processing_run != processingRun`; thumbnail com chave determinística; transição final por compare-and-set
 **Failure:** `version` desconhecida ou mídia inválida ⇒ `UnrecoverableError` (sem retry) ⇒ `failed/INVALID_MEDIA`; erro transitório ⇒ retry com backoff; última tentativa falha ⇒ `failed/PROCESSING_FAILED`
@@ -785,6 +788,15 @@ Códigos internos de falha persistidos em `videos.failure_reason` (não são res
 **Trigger:** periódico (padrão 15 min)
 **Effect:** para cada vídeo `draft` com `upload_expires_at < now()` (lote de 100): `AbortMultipartUpload` (ignora `NoSuchUpload`) + CAS `draft → failed/UPLOAD_EXPIRED` (per `phase-03-videos/TD-03`)
 **Delivery semantics:** at-least-once; operação idempotente
+
+#### processing.reconcile (fila `video-processing`, job agendado)
+
+**Payload:** `{ "version": 1 }`
+**Producer:** `ProcessingReconcileScheduler` no worker (`queue.upsertJobScheduler('processing-reconcile', { every: PROCESSING_RECONCILE_INTERVAL_MS })`)
+**Consumer:** `VideoProcessingProcessor` → `ProcessingReconcilerService`
+**Trigger:** periódico (padrão 60 s)
+**Effect:** pagina as linhas `processing` em lotes de 100 e consulta `Queue.getJob(video-process-{videoId}-{processingRun})`; job ausente é republicado com o mesmo id; `waiting`/`delayed`/`prioritized`/`active`/`waiting-children` não sofrem alteração; `failed` ou `completed` ainda associado a uma linha `processing` causa CAS `processing → failed/PROCESSING_FAILED` com o run esperado.
+**Delivery semantics:** at-least-once; republicação e transição são idempotentes e uma execução antiga não sobrescreve run novo ou vídeo `ready`.
 
 ---
 

@@ -33,7 +33,7 @@ libs:
     context7_id: "inherited — phase-02-auth/TD-08"
     fetched_at: "2026-10-11T18:27:44-03:00"
 sources_mtime:
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-10-11T18:30:19-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-10-11T20:05:00-03:00"
 ---
 
 # phase-03-videos — Library references

@@ -4,8 +4,8 @@ name: phase-03-videos
 status: clean
 issue_count: 0
 sources_mtime:
-  docs/phases/phase-03-videos/context.md: "2026-10-11T18:30:31-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-10-11T18:30:19-03:00"
+  docs/phases/phase-03-videos/context.md: "2026-10-11T21:53:28-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-10-11T20:05:00-03:00"
 issues:
   - id: IC-1
     status: resolved
@@ -76,7 +76,7 @@ advisories: []
 
 # phase-03-videos — Validation
 
-> _Execution note (revision 3, after TD-02/TD-06/TD-11 Revisions — re-validated, still clean; revisions keep the decided option letters and introduce no conflict):_ (revision 2, after plan-resolve): all checks re-run against the patched context.md; no new issue surfaced (decided TDs checked against inherited conventions — TD-10 explicitly overrides the global throttler per route, TD-08 records the diagram deviation). Produced by the agent executing `plan-validate/SKILL.md` (Checks 1–7; Check 8 suppressed — single slice; no custom rules in `docs/rules/plan-validate/`). Only `context.md` was read, per the skill's read scope; issue evidence that references code was already summarized in `context.md` (`Inherited Conventions`, `Inherited Decisions Detail`) or in the decisions doc.
+> _Execution note (revision 4, after the TD-01 implementation Revisions — @nestjs/bullmq 11.0.5 and ioredis; same option letter, no new issue; still clean). (revision 3, after TD-02/TD-06/TD-11 Revisions — re-validated, still clean; revisions keep the decided option letters and introduce no conflict):_ (revision 2, after plan-resolve): all checks re-run against the patched context.md; no new issue surfaced (decided TDs checked against inherited conventions — TD-10 explicitly overrides the global throttler per route, TD-08 records the diagram deviation). Produced by the agent executing `plan-validate/SKILL.md` (Checks 1–7; Check 8 suppressed — single slice; no custom rules in `docs/rules/plan-validate/`). Only `context.md` was read, per the skill's read scope; issue evidence that references code was already summarized in `context.md` (`Inherited Conventions`, `Inherited Decisions Detail`) or in the decisions doc.
 
 ## Findings
 

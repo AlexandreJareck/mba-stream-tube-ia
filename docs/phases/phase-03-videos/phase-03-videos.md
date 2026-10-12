@@ -3,9 +3,9 @@ kind: phase
 name: phase-03-videos
 test_specs_aware: true
 sources_mtime:
-  docs/phases/phase-03-videos/context.md: "2026-10-11T18:30:31-03:00"
-  docs/phases/phase-03-videos/library-refs.md: "2026-10-11T18:30:41-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-10-11T18:30:19-03:00"
+  docs/phases/phase-03-videos/context.md: "2026-10-11T21:53:28-03:00"
+  docs/phases/phase-03-videos/library-refs.md: "2026-10-11T21:53:28-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-10-11T20:05:00-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-10-11T16:50:27-03:00"
 ---
 
@@ -609,6 +609,7 @@ Convenções herdadas: envelope de erro `{ statusCode, error, message }` (`phase
 - 400 VALIDATION_ERROR: corpo inválido (inclui `size_bytes` > 10737418240 e `content_type` fora da allowlist)
 - 401: token ausente/inválido
 - 404 CHANNEL_NOT_FOUND: usuário autenticado sem canal
+- 413 VIDEO_TOO_LARGE: acima de `VIDEO_MAX_SIZE_BYTES` (quando configurado abaixo de 10 GiB)
 - 503 STORAGE_UNAVAILABLE: falha ao criar o multipart upload
 
 ---
@@ -747,6 +748,7 @@ Identidade: `@CurrentUser().sub` → `ChannelsService.findByUserId` → `channel
 | VIDEO_NOT_FOUND | 404 | Vídeo inexistente, de outro canal (rotas de dono) ou não `ready` (rotas públicas) |
 | INVALID_VIDEO_STATUS | 409 | Operação não permitida no status atual (transição inválida) |
 | UPLOAD_EXPIRED | 410 | Sessão de upload (`upload_expires_at`) vencida |
+| VIDEO_TOO_LARGE | 413 | `size_bytes` acima de `VIDEO_MAX_SIZE_BYTES` quando configurado abaixo do limite rígido de 10 GiB (adicionado na implementação do SI-03.9) |
 | UPLOAD_INCOMPLETE | 409 | Partes faltantes ou com tamanho divergente ao completar |
 | UPLOAD_SIZE_MISMATCH | 422 | Objeto montado com tamanho ≠ `size_bytes` declarado |
 | VIDEO_SOURCE_MISSING | 404 / 409 | Objeto fonte ausente (404 em streaming/download; 409 em reprocess) |

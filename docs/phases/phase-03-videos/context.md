@@ -3,14 +3,14 @@ kind: phase
 name: phase-03-videos
 sources_mtime:
   docs/project-plan.md: "2026-09-24T00:15:00-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-10-11T18:30:19-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-10-11T20:05:00-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-10-11T16:50:27-03:00"
   docs/phases/phase-01-configuracao-base/context.md: "2026-10-11T16:50:27-03:00"
   docs/phases/phase-02-auth/context.md: "2026-10-11T16:50:27-03:00"
   docs/phases/phase-02-auth-frontend/context.md: "2026-10-11T16:50:27-03:00"
   docs/phase-03-handoff/specification.md: "2026-10-11T16:50:27-03:00"
   .claude/skills/testing-guide-nestjs-project/SKILL.md: "2026-09-24T00:15:00-03:00"
-  docs/phases/phase-03-videos/library-refs.md: "2026-10-11T18:28:17-03:00"
+  docs/phases/phase-03-videos/library-refs.md: "2026-10-11T21:53:28-03:00"
 ---
 
 # phase-03-videos — Context
@@ -52,7 +52,8 @@ sources_mtime:
 
 | Ref | Source | Scope | Topic | Status | Decision | Libraries |
 |-----|--------|-------|-------|--------|----------|-----------|
-| phase-03-videos/TD-01 | phase | Backend | Processing Queue Technology and NestJS Integration | decided | A (BullMQ + Redis via `@nestjs/bullmq`) | `bullmq@^6.3.x`, `@nestjs/bullmq@^12.0.x`, `ioredis` (transitive via bullmq) |
+| phase-03-videos/TD-01 | phase | Backend | Processing Queue Technology and NestJS Integration | decided | A (BullMQ + Redis via `@nestjs/bullmq`) | `bullmq@^6.3.x`, `@nestjs/bullmq@^11.0.5`, `ioredis@^5.11.1` |
+|  └─ Last revision: 2026-10-11 (implementation finding — @nestjs/bullmq 11.0.5, ioredis) | | | | | | |
 | phase-03-videos/TD-02 | phase | Cross-layer | Direct Upload Protocol for Files up to 10 GB | decided | A (S3 multipart upload with presigned `UploadPart` URLs) | `@aws-sdk/client-s3@^3.x`, `@aws-sdk/s3-request-presigner@^3.x` |
 |  └─ Last revision: 2026-10-11 (plan-build contract refinement) | | | | | | |
 | phase-03-videos/TD-03 | phase | Backend | Bucket Layout, Object Keys, Lifecycle and Access Policy | decided | A (Single private bucket, prefix-per-video keys, app-level cleanup) | `@aws-sdk/client-s3@^3.x` |
@@ -91,7 +92,11 @@ _Source files:_
 
 **Recommendation:** BullMQ + Redis via `@nestjs/bullmq` — it is the queue the project's own best-practices skill prescribes, has first-class Nest 11 support and covers retries, deduplication by `jobId`, stalled-job recovery and failed-job retention natively; the non-atomic enqueue is closed by the idempotent completion/re-publish design in TD-06.
 
-**Libraries:** `bullmq@^6.3.x`, `@nestjs/bullmq@^12.0.x`, `ioredis` (transitive via bullmq)
+**Libraries:** `bullmq@^6.3.x`, `@nestjs/bullmq@^11.0.5`, `ioredis@^5.11.1`
+
+**Revisions:**
+- 2026-10-11 — `@nestjs/bullmq` pinned to `^11.0.5` instead of `^12.0.0`. Rationale: implementation finding (SI-03.10) — `@nestjs/bullmq@12.0.0` is published as ESM-only (`"type": "module"`), which the project's CommonJS Nest/ts-jest toolchain cannot load; `11.0.5` is CommonJS and its peer range already covers `bullmq ^6` and Nest 11.
+- 2026-10-11 — `ioredis@^5.11.1` added as a direct dependency. Rationale: implementation finding (SI-03.10) — in `bullmq@6` the Redis client is an optional peer dependency (`ioredis >=5`), not bundled; BullMQ fails at startup without it.
 
 ### phase-03-videos/TD-02
 

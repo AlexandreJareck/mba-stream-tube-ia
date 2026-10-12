@@ -108,7 +108,6 @@ describe('VideosService (integration: PostgreSQL + MinIO + Redis)', () => {
       .getRepository(Video)
       .findOneByOrFail({ id: started.id });
     expect(row.upload_id).toBeNull();
-    await Promise.all(jobs.map((job) => job.remove()));
   });
 
   it('should keep the draft when a part is missing', async () => {

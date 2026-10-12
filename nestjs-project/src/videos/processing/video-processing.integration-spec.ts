@@ -16,6 +16,7 @@ import { waitFor } from '../../test/wait';
 import { WorkerModule } from '../../worker/worker.module';
 import { Video } from '../entities/video.entity';
 import { buildStorageKeys } from '../upload-plan.util';
+import type { VideoProcessMessage } from '../video-process.message';
 import { VideoProcessingQueue } from '../video-processing.queue';
 import { VideoStatus } from '../video-status.enum';
 import { VIDEO_QUEUE } from '../videos.constants';
@@ -45,7 +46,10 @@ describe('Video processing worker (integration)', () => {
     videos = dataSource.getRepository(Video);
     storage = module.get(StorageService);
     queue = module.get<Queue>(getQueueToken(VIDEO_QUEUE.NAME));
-    producer = new VideoProcessingQueue(queue, module.get(videoConfig.KEY));
+    producer = new VideoProcessingQueue(
+      queue as Queue<VideoProcessMessage>,
+      module.get(videoConfig.KEY),
+    );
   });
 
   afterAll(async () => {

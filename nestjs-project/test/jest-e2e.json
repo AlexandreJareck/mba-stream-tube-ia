@@ -7,5 +7,6 @@
     "^.+\\.(t|j)s$": "ts-jest"
   },
   "setupFiles": ["dotenv/config"],
-  "testTimeout": 120000
+  "testTimeout": 120000,
+  "maxWorkers": 1
 }

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import request from 'supertest';
 import { cleanAllTables } from '../src/test/create-test-data-source';
 import {
+  binaryParser,
   bodyOf,
   createTestApp,
   ErrorBody,
@@ -13,14 +14,6 @@ import {
 import { seedDraftVideo, seedReadyVideo } from './helpers/videos';
 
 /** supertest parser that keeps binary bodies as a Buffer. */
-function binary(
-  res: NodeJS.ReadableStream,
-  callback: (err: Error | null, body: Buffer) => void,
-): void {
-  const chunks: Buffer[] = [];
-  res.on('data', (chunk: Buffer) => chunks.push(chunk));
-  res.on('end', () => callback(null, Buffer.concat(chunks)));
-}
 
 const sha256 = (data: Buffer) =>
   createHash('sha256').update(data).digest('hex');
@@ -53,7 +46,7 @@ describe('Streaming (Range/206) and download (e2e)', () => {
   });
 
   const get = (path: string) =>
-    request(ctx.app.getHttpServer()).get(path).buffer(true).parse(binary);
+    request(ctx.app.getHttpServer()).get(path).buffer(true).parse(binaryParser);
 
   describe('Range streaming and download', () => {
     it('partial-range-returns-206', async () => {
@@ -91,7 +84,7 @@ describe('Streaming (Range/206) and download (e2e)', () => {
     it('download-is-attachment-and-intact', async () => {
       const res = await get(`/videos/${ready.publicId}/download`).expect(200);
 
-      const disposition = res.headers['content-disposition'] as string;
+      const disposition = res.headers['content-disposition'];
       expect(disposition.startsWith('attachment;')).toBe(true);
       expect(disposition).toContain('filename="ready clip cao.mp4"');
       expect(sha256(res.body as Buffer)).toBe(sha256(fixture));

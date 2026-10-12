@@ -44,7 +44,6 @@ describe('VideoProcessingQueue (integration, Redis)', () => {
     expect(job?.data).toEqual({ version: 1, videoId, processingRun: 1 });
     expect(job?.opts.attempts).toBe(3);
     expect(job?.opts.backoff).toEqual({ type: 'exponential', delay: 10000 });
-    await job?.remove();
   });
 
   it('should not duplicate the job when the same run is published twice', async () => {
@@ -55,7 +54,6 @@ describe('VideoProcessingQueue (integration, Redis)', () => {
 
     const jobs = await jobsForVideo(queue, videoId);
     expect(jobs).toHaveLength(1);
-    await Promise.all(jobs.map((job) => job.remove()));
   });
 
   it('should publish a separate job for a new processing run', async () => {
@@ -69,6 +67,5 @@ describe('VideoProcessingQueue (integration, Redis)', () => {
       `video-process-${videoId}-1`,
       `video-process-${videoId}-2`,
     ]);
-    await Promise.all(jobs.map((job) => job.remove()));
   });
 });

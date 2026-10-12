@@ -114,3 +114,13 @@ export interface VideoBody {
   failure_reason: string | null;
   processing_run: number;
 }
+
+/** supertest `.parse()` callback that keeps binary bodies as a Buffer. */
+export const binaryParser: Parameters<request.Test['parse']>[0] = (
+  res,
+  callback,
+) => {
+  const chunks: Buffer[] = [];
+  res.on('data', (chunk: Buffer) => chunks.push(chunk));
+  res.on('end', () => callback(null, Buffer.concat(chunks)));
+};

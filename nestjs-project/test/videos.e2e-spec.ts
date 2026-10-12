@@ -8,6 +8,7 @@ import { putToPresignedUrl } from '../src/test/storage';
 import { waitFor } from '../src/test/wait';
 import { WorkerModule } from '../src/worker/worker.module';
 import {
+  binaryParser,
   bodyOf,
   createTestApp,
   registerConfirmedUser,
@@ -22,15 +23,6 @@ interface PublicVideoBody {
   thumbnail_url: string;
   stream_url: string;
   download_url: string;
-}
-
-function binary(
-  res: NodeJS.ReadableStream,
-  callback: (err: Error | null, body: Buffer) => void,
-): void {
-  const chunks: Buffer[] = [];
-  res.on('data', (chunk: Buffer) => chunks.push(chunk));
-  res.on('end', () => callback(null, Buffer.concat(chunks)));
 }
 
 const sha256 = (data: Buffer) =>
@@ -129,7 +121,7 @@ describe('Video upload → processing → playback (e2e)', () => {
     const thumbnail = await http()
       .get(published.thumbnail_url)
       .buffer(true)
-      .parse(binary)
+      .parse(binaryParser)
       .expect(200);
     expect(thumbnail.headers['content-type']).toBe('image/jpeg');
     expect((thumbnail.body as Buffer).subarray(0, 3)).toEqual(
@@ -141,7 +133,7 @@ describe('Video upload → processing → playback (e2e)', () => {
       .get(published.stream_url)
       .set('Range', 'bytes=100-199')
       .buffer(true)
-      .parse(binary)
+      .parse(binaryParser)
       .expect(206);
     expect(partial.headers['content-range']).toBe(
       `bytes 100-199/${fixture.length}`,
@@ -151,7 +143,7 @@ describe('Video upload → processing → playback (e2e)', () => {
     const download = await http()
       .get(published.download_url)
       .buffer(true)
-      .parse(binary)
+      .parse(binaryParser)
       .expect(200);
     expect(download.headers['content-disposition']).toContain('attachment;');
     expect(sha256(download.body as Buffer)).toBe(sha256(fixture));

@@ -38,7 +38,7 @@ sources_mtime:
 
 # phase-03-videos — Library references
 
-> **How these references were obtained.** The project rule (`CLAUDE.md` → Library Documentation Lookup) mandates Context7. The Context7 **MCP** server is not configured in this workspace (`.mcp.json` only declares `postgres`), so the agent queried the same Context7 index through its public HTTP API (`GET https://context7.com/api/v1/search?query=…` and `GET https://context7.com/api/v1/{library-id}?type=txt&topic=…`). Raw excerpts were kept in the session scratchpad; the distilled, version-relevant facts are recorded below. Versions were checked with `npm view` on 2026-10-11 and against peer-dependency ranges.
+> **How these references were obtained.** The project rule (`CLAUDE.md` → Library Documentation Lookup) mandates Context7. At research time the Context7 **MCP** server was not configured in this workspace (`.mcp.json` only declared `postgres`; it was added afterwards in commit `5b566ac`), so the agent queried the same Context7 index through its public HTTP API (`GET https://context7.com/api/v1/search?query=…` and `GET https://context7.com/api/v1/{library-id}?type=txt&topic=…`). Raw excerpts were kept in the session scratchpad; the distilled, version-relevant facts are recorded below. Versions were checked with `npm view` on 2026-10-11 and against peer-dependency ranges.
 
 ## Version compatibility check
 

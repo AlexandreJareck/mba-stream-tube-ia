@@ -1,6 +1,6 @@
 # phase-03-videos — Progress
 
-**Status:** completed — 18/18 SIs; one Definition of Done item open: `npm run lint` fails on 150 pre-existing errors (see Final verification)
+**Status:** completed — 18/18 SIs; Definition of Done passes (tests, e2e, tsc, lint)
 **SIs:** 18/18 completed
 **Branch:** `feature/phase-03-videos` (from local `dev`)
 
@@ -223,9 +223,23 @@ Fixes made during final verification (each its own commit): e2e now runs in band
 
 ## Open items / limitations
 
-- **Lint (DoD):** `npm run lint` still fails because of 150 pre-existing `@typescript-eslint/no-unsafe-*`/`unbound-method` errors in Phase 01/02 test files and `channels.service.ts`. Out of Phase 03 scope (not mixed into this work); suggested as a separate cleanup task.
 - **Jest open handles (pre-existing):** at baseline `npm test` never exited ("Jest did not exit one second after…"); after the Phase 03 fixes the final runs exited normally, but `--detectOpenHandles` was not investigated.
 - **Worker crash window:** if the worker dies after the final failed attempt but before the `failed` handler persists `failed`, the video stays `processing` with its job in the failed set; `reprocess` only accepts `failed`, so recovery needs a manual DB update. A watchdog for stale `processing` rows was not part of the plan.
 - **MinIO image:** official `minio/minio`/`minio/mc` images are no longer publicly pullable; the stack pins the frozen `bitnamilegacy` builds (MinIO 2025-07).
 - **Streaming bandwidth:** playback/download traverse the API by decision (TD-08); a presigned-redirect optimization remains possible behind the same routes.
 - **Branch not pushed:** `dev` was fast-forwarded/merged locally and `feature/phase-03-videos` exists only locally.
+
+## Definition of Done closure (2026-10-12)
+
+The acceptance review against the assignment found three remaining gaps, closed in separate commits:
+
+- **Lint (DoD, automatic-failure criterion):** the 150 pre-existing errors were fixed (`88b4349`): typed supertest bodies, fixtures and Mailpit helpers; the test files use `eslint-plugin-jest`'s `jest/unbound-method`, as recommended by https://typescript-eslint.io/rules/unbound-method/. No runtime behaviour changes.
+- **Root `CLAUDE.md`:** the `next-frontend/` line said "not yet initialized"; it now describes the existing frontend (`afeef08`).
+- **Context7 MCP:** `.mcp.json` now declares the Context7 server (`5b566ac`, public remote endpoint, no secrets). The research in this phase used the same Context7 index over its HTTP API (see `library-refs.md`).
+
+| Check | Result |
+|---|---|
+| `npm test -- --runInBand` | **exit 0 — 43/43 suites, 291/291 tests** |
+| `npm run test:e2e` | **exit 0 — 9/9 suites, 76/76 tests** |
+| `npx tsc --noEmit` | **exit 0** |
+| `npm run lint` | **exit 0 — 0 errors** (23 warnings of the `no-unsafe-argument` rule, configured as warning) |

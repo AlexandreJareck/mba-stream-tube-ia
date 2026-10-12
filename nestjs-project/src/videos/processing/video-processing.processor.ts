@@ -10,6 +10,7 @@ import {
   VIDEO_QUEUE,
 } from '../videos.constants';
 import { InvalidMediaError } from './media-probe.service';
+import { UploadSweeperService } from './upload-sweeper.service';
 import { VideoProcessingService } from './video-processing.service';
 
 /** Invalid media: never retried, and the run ends as `failed/INVALID_MEDIA`. */
@@ -34,6 +35,7 @@ export class VideoProcessingProcessor
 
   constructor(
     private readonly processing: VideoProcessingService,
+    private readonly sweeper: UploadSweeperService,
     @Inject(videoConfig.KEY)
     private readonly config: ConfigType<typeof videoConfig>,
   ) {
@@ -48,6 +50,8 @@ export class VideoProcessingProcessor
     switch (job.name) {
       case VIDEO_QUEUE.PROCESS_JOB:
         return this.processVideo(job as Job<VideoProcessMessage>);
+      case VIDEO_QUEUE.SWEEP_JOB:
+        return this.sweeper.sweep(new Date());
       default:
         throw new UnrecoverableError(`Unknown job name "${job.name}"`);
     }

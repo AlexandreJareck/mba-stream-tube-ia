@@ -12,6 +12,10 @@ import { StorageModule } from '../storage/storage.module';
 import { User } from '../users/entities/user.entity';
 import { Video } from '../videos/entities/video.entity';
 import { MediaProbeService } from '../videos/processing/media-probe.service';
+import {
+  UploadSweepScheduler,
+  UploadSweeperService,
+} from '../videos/processing/upload-sweeper.service';
 import { VideoProcessingProcessor } from '../videos/processing/video-processing.processor';
 import { VideoProcessingService } from '../videos/processing/video-processing.service';
 import { generatePublicId } from '../videos/public-id.util';
@@ -51,6 +55,8 @@ import { WorkerHeartbeatService } from './worker-heartbeat.service';
     MediaProbeService,
     VideoProcessingService,
     VideoProcessingProcessor,
+    UploadSweeperService,
+    UploadSweepScheduler,
     WorkerHeartbeatService,
   ],
 })

@@ -20,7 +20,7 @@ See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
 
 - **Frontend** (Next.js) → calls API via REST; uploads video parts directly to Object Storage through presigned URLs; plays/downloads videos through the API stream routes (Phase 03 decision `phase-03-videos/TD-08`)
 - **API** (Nest.js) → business rules, auth, reads/writes DB, opens multipart uploads and presigns part URLs (never receives video bytes), proxies Range/206 streaming and downloads from storage, publishes jobs to the queue, sends emails
-- **Video Worker** (Nest.js standalone app + FFmpeg, `nestjs-project/src/worker.ts`, Compose service `worker`) → consumes `video.process` jobs, extracts duration/metadata with ffprobe, generates the thumbnail with ffmpeg, updates DB and storage; also expires abandoned uploads (`uploads.sweep`)
+- **Video Worker** (Nest.js standalone app + FFmpeg, `nestjs-project/src/worker.ts`, Compose service `worker`) → consumes `video.process` jobs, extracts duration/metadata with ffprobe, generates the thumbnail with ffmpeg, updates DB and storage; expires abandoned uploads (`uploads.sweep`) and reconciles `processing` rows with BullMQ (`processing.reconcile`)
 - **Database** (PostgreSQL) → users, channels, videos (comments and likes in later phases)
 - **Object Storage** (S3-compatible; MinIO locally as Compose service `minio`, private bucket `streamtube-videos`) → video files (`videos/{id}/source`) and thumbnails (`videos/{id}/thumbnail.jpg`)
 - **Message Queue** (BullMQ on Redis, Compose service `redis`) → `video-processing` queue

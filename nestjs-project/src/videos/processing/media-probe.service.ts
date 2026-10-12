@@ -49,6 +49,10 @@ const INVALID_INPUT_PATTERNS = [
   /Invalid argument/i,
 ];
 
+export function redactMediaToolDetail(detail: string): string {
+  return detail.replace(/https?:\/\/\S+/gi, '[REDACTED_URL]');
+}
+
 function toNumber(value: string | number | undefined): number | null {
   if (value === undefined) return null;
   const parsed = Number(value);
@@ -177,7 +181,9 @@ export class MediaProbeService {
           resolve(Buffer.concat(stdout).toString());
           return;
         }
-        const detail = stderr.trim() || `exit code ${code}`;
+        const detail = redactMediaToolDetail(
+          stderr.trim() || `exit code ${code}`,
+        );
         reject(
           INVALID_INPUT_PATTERNS.some((pattern) => pattern.test(stderr))
             ? new InvalidMediaError(detail)

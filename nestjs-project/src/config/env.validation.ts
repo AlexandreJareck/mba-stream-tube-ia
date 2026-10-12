@@ -54,4 +54,8 @@ export const envValidationSchema = Joi.object({
   VIDEO_PROCESSING_BACKOFF_MS: Joi.number().integer().min(0).default(10000),
   WORKER_CONCURRENCY: Joi.number().integer().min(1).default(2),
   UPLOAD_SWEEP_INTERVAL_MS: Joi.number().integer().min(1000).default(900000),
+  PROCESSING_RECONCILE_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(1000)
+    .default(60000),
 });

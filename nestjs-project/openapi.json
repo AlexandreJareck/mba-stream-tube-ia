@@ -790,7 +790,7 @@
     },
     "/channels/me/videos/{id}/reprocess": {
       "post": {
-        "description": "Starts a new processing run for a failed video whose source file is still stored.",
+        "description": "Starts one new run for a failed video whose source still exists. Repeating the request while processing safely republishes the same deterministic job without incrementing processing_run.",
         "operationId": "ChannelVideosController_reprocess",
         "parameters": [
           {
@@ -804,7 +804,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Video is processing again (processing_run incremented)",
+            "description": "Video is processing; processing_run is incremented only when entering from failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -844,7 +844,7 @@
             }
           },
           "409": {
-            "description": "Video is not failed (INVALID_VIDEO_STATUS) or its source is gone (VIDEO_SOURCE_MISSING)",
+            "description": "Video is neither failed nor processing (INVALID_VIDEO_STATUS), or its source is gone (VIDEO_SOURCE_MISSING)",
             "content": {
               "application/json": {
                 "schema": {
@@ -869,7 +869,7 @@
             "access-token": []
           }
         ],
-        "summary": "Reprocess a failed video",
+        "summary": "Reprocess or recover a video processing run",
         "tags": [
           "videos"
         ]

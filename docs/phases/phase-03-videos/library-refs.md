@@ -99,3 +99,21 @@ sources_mtime:
 - `NestFactory.createApplicationContext(WorkerModule)` — standalone app (no HTTP listener) for the worker; `app.enableShutdownHooks()`.
 - `@SkipThrottle()` from `@nestjs/throttler` exempts a route from the global `ThrottlerGuard` (inherited TD-08).
 - RFC 9110 §14: `Range: bytes=a-b | a- | -n`; `206` + `Content-Range: bytes a-b/size`; unsatisfiable → `416` + `Content-Range: bytes */size`; multiple ranges may be ignored (serve `200` full or first range).
+
+## Retrospective remediation verification — 2026-10-12
+
+This was a retrospective remediation check, separate from the original research described above. In this session the configured Context7 MCP server was available through the `mcp__context7` tool namespace (the project configuration points `context7` at `https://mcp.context7.com/mcp`). The following Context7 library IDs and topics were queried directly through that MCP server; no web search or direct Context7 HTTP request was used:
+
+- `/taskforcesh/bullmq`: NestJS/`@nestjs/bullmq` queue injection and registration; `Queue.getJob`; `Job.getState`; deterministic `jobId` deduplication; attempts and exponential backoff; `removeOnComplete`/`removeOnFail`; `Queue.upsertJobScheduler`; `waiting`, `delayed`, `prioritized`, `active`, `waiting-children`, `completed`, and `failed`; worker close and restart behavior.
+- `/aws/aws-sdk-js-v3`: multipart lifecycle with `CreateMultipartUpload`, presigned `UploadPart`, paginated `ListParts`, `CompleteMultipartUpload`, and `AbortMultipartUpload`; object verification/read with `HeadObject` and `GetObject`; `getSignedUrl` and expiry behavior.
+- `/nestjs/docs.nestjs.com`: `NestFactory.createApplicationContext`, standalone application lifecycle, shutdown hooks, and clean worker termination with `app.close()`.
+
+The exact installed versions were read from `nestjs-project/package-lock.json`: `@nestjs/bullmq@11.0.5`, `bullmq@6.3.12`, `ioredis@5.11.1`, `@aws-sdk/client-s3@3.1149.0`, `@aws-sdk/s3-request-presigner@3.1149.0`, and NestJS `@nestjs/common`, `@nestjs/core`, and `@nestjs/platform-express` at `11.1.16`.
+
+Implementation conclusions:
+
+- BullMQ: `VideoProcessingQueue` uses the documented Nest injection pattern, a deterministic per-run `jobId`, three configurable attempts with exponential backoff, and age-based completed/failed retention. `ProcessingReconcilerService` retrieves the deterministic job, treats all documented non-terminal states as pending, handles `failed` and the anomalous `completed`-while-database-is-still-`processing` case as terminal, republishes missing jobs idempotently, and installs the recurring reconciliation with `upsertJobScheduler`. A removed retained job no longer participates in job-ID deduplication, which is why the database status/run compare-and-set remains the source-of-truth guard.
+- AWS SDK v3: `StorageService` follows the command-based multipart sequence, paginates `ListParts`, forwards ordered part numbers/ETags to completion, treats a missing abort target idempotently, verifies metadata with `HeadObject`, streams `GetObject` bodies instead of buffering them, and supplies explicit expirations to `getSignedUrl` for upload parts and internal reads.
+- NestJS: `worker.ts` correctly creates a non-HTTP standalone application context and enables shutdown hooks. The processor lives only in `WorkerModule`; Nest's shutdown lifecycle closes the BullMQ worker so active work can drain, while BullMQ's persisted queue state supports restart recovery. The long-running worker intentionally does not call `app.close()` immediately; that call is appropriate when terminating a finite standalone task or from shutdown handling.
+
+No implementation/API incompatibility was found, so no code or test change was necessary. The only discrepancy resolved here was documentary: the earlier remediation attempt correctly recorded that Context7 MCP was unavailable in that session, whereas this session did expose and use it. This entry replaces that obsolete blocker without altering the historical statement that the original Phase 03 research used Context7's public HTTP API.

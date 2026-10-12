@@ -201,13 +201,13 @@ export class VideosService {
     );
   }
 
-  /**
-   * Recovery path for `failed` videos (TD-09): starts a new processing run
-   * when the source object is still in storage.
-   */
+  /** Starts a new run from `failed`, or republishes the current processing run. */
   async reprocess(userId: string, videoId: string): Promise<VideoResponseDto> {
     const video = await this.requireOwnedVideo(userId, videoId);
-    if (video.status !== VideoStatus.FAILED) {
+    if (
+      video.status !== VideoStatus.FAILED &&
+      video.status !== VideoStatus.PROCESSING
+    ) {
       throw new InvalidVideoStatusException(
         video.status,
         VideoStatus.PROCESSING,
@@ -217,17 +217,24 @@ export class VideosService {
       throw new VideoSourceMissingException(409);
     }
 
-    const applied = await this.videos.transition(
-      video.id,
-      VideoStatus.FAILED,
-      VideoStatus.PROCESSING,
-      {
-        incrementRun: true,
-        patch: { failure_reason: null, failed_at: null, processed_at: null },
-      },
-    );
+    const applied =
+      video.status === VideoStatus.FAILED
+        ? await this.videos.transition(
+            video.id,
+            VideoStatus.FAILED,
+            VideoStatus.PROCESSING,
+            {
+              incrementRun: true,
+              patch: {
+                failure_reason: null,
+                failed_at: null,
+                processed_at: null,
+              },
+            },
+          )
+        : false;
     const current = await this.requireVideo(video.id);
-    if (!applied) {
+    if (current.status !== VideoStatus.PROCESSING) {
       throw new InvalidVideoStatusException(
         current.status,
         VideoStatus.PROCESSING,
@@ -239,7 +246,7 @@ export class VideosService {
       current.processing_run,
     );
     this.logger.log(
-      `Reprocess requested videoId=${current.id} processingRun=${current.processing_run}`,
+      `Reprocess requested videoId=${current.id} processingRun=${current.processing_run} newRun=${applied}`,
     );
     return VideoResponseDto.fromEntity(current);
   }

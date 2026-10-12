@@ -224,7 +224,7 @@ Fixes made during final verification (each its own commit): e2e now runs in band
 ## Open items / limitations
 
 - **Jest open handles (pre-existing):** at baseline `npm test` never exited ("Jest did not exit one second after…"); after the Phase 03 fixes the final runs exited normally, but `--detectOpenHandles` was not investigated.
-- **Worker crash window:** if the worker dies after the final failed attempt but before the `failed` handler persists `failed`, the video stays `processing` with its job in the failed set; `reprocess` only accepts `failed`, so recovery needs a manual DB update. A watchdog for stale `processing` rows was not part of the plan.
+- **Worker crash window (remediated 2026-10-12):** scheduled `processing.reconcile` now compares every current `processing_run` with its deterministic BullMQ job. Missing jobs are republished; terminal jobs are CAS-marked `failed/PROCESSING_FAILED`; pending jobs are left untouched. Real PostgreSQL/Redis integration coverage exercises failed, missing, waiting, stale-run and repeated reconciliation cases.
 - **MinIO image:** official `minio/minio`/`minio/mc` images are no longer publicly pullable; the stack pins the frozen `bitnamilegacy` builds (MinIO 2025-07).
 - **Streaming bandwidth:** playback/download traverse the API by decision (TD-08); a presigned-redirect optimization remains possible behind the same routes.
 - **Branch not pushed:** `dev` was fast-forwarded/merged locally and `feature/phase-03-videos` exists only locally.
@@ -236,6 +236,29 @@ The acceptance review against the assignment found three remaining gaps, closed 
 - **Lint (DoD, automatic-failure criterion):** the 150 pre-existing errors were fixed (`88b4349`): typed supertest bodies, fixtures and Mailpit helpers; the test files use `eslint-plugin-jest`'s `jest/unbound-method`, as recommended by https://typescript-eslint.io/rules/unbound-method/. No runtime behaviour changes.
 - **Root `CLAUDE.md`:** the `next-frontend/` line said "not yet initialized"; it now describes the existing frontend (`afeef08`).
 - **Context7 MCP:** `.mcp.json` now declares the Context7 server (`5b566ac`, public remote endpoint, no secrets). The research in this phase used the same Context7 index over its HTTP API (see `library-refs.md`).
+
+## Remediation status (2026-10-12)
+
+- Reprocess is now idempotent for `processing`, repairs enqueue failure with the same `processing_run`, and concurrent `failed → processing` requests converge on one run/job.
+- Infrastructure-backed module tests were renamed to `*.integration-spec.ts`.
+- Plan contracts now include `400 VALIDATION_ERROR` for invalid UUIDs on upload completion and reprocess.
+- Context7 MCP retrospective verification is **complete** (2026-10-12): this session used the configured `mcp__context7` server to query `/taskforcesh/bullmq`, `/aws/aws-sdk-js-v3`, and `/nestjs/docs.nestjs.com`. Installed lockfile versions and the queue, storage, reconciliation, and worker lifecycle implementations were checked; no code incompatibility was found. The obsolete session-availability blocker and full evidence are recorded in `library-refs.md`; the original Phase 03 HTTP-API research disclosure remains unchanged.
+- Worker/tool error details redact HTTP(S) URLs before logging, preventing presigned storage credentials from appearing in logs.
+
+### Remediation verification
+
+| Check | Result |
+|---|---|
+| `docker compose up -d --build` | exit 0 |
+| `npm install` | exit 0; 51 audit findings reported by npm (2 low, 17 moderate, 29 high, 3 critical), not changed by this remediation |
+| `npm run migration:run` | exit 0; no migrations pending |
+| targeted remediation tests | exit 0; 2/2 suites, 27/27 tests (before the final full run) |
+| `npm test -- --runInBand` | exit 0; 44/44 suites, 300/300 tests |
+| `npm run test:e2e` | exit 0; 9/9 suites, 77/77 tests |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0; 0 errors, 23 existing `no-unsafe-argument` warnings |
+| Compose | db, mailpit, minio, redis, worker healthy; `minio-init` exited 0; PostgreSQL accepting connections; Redis `PONG` |
+| 10 GiB acceptance | PASS; 10,737,418,240-byte object completed, 10,737,418,241 rejected, generated source deleted; MinIO had 921 GiB free before the run |
 
 | Check | Result |
 |---|---|

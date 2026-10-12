@@ -1,6 +1,7 @@
 import {
   InvalidMediaError,
   parseProbeOutput,
+  redactMediaToolDetail,
   thumbnailTimestamp,
 } from './media-probe.service';
 
@@ -74,5 +75,14 @@ describe('thumbnailTimestamp', () => {
 
   it('should use the midpoint of very short clips', () => {
     expect(thumbnailTimestamp(1.5)).toBe(0.75);
+  });
+});
+
+describe('redactMediaToolDetail', () => {
+  it('should remove presigned URLs from tool errors before logging', () => {
+    const detail =
+      'https://minio:9000/bucket/source?X-Amz-Credential=secret: Invalid data';
+
+    expect(redactMediaToolDetail(detail)).toBe('[REDACTED_URL] Invalid data');
   });
 });

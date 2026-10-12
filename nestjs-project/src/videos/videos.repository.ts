@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThan, QueryFailedError, Repository } from 'typeorm';
+import { LessThan, MoreThan, QueryFailedError, Repository } from 'typeorm';
 import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { Video } from './entities/video.entity';
 import { VideoStatus } from './video-status.enum';
@@ -123,6 +123,17 @@ export class VideosRepository {
     return this.repository.find({
       where: { status: VideoStatus.DRAFT, upload_expires_at: LessThan(now) },
       order: { upload_expires_at: 'ASC' },
+      take: limit,
+    });
+  }
+
+  async findProcessing(limit: number, afterId?: string): Promise<Video[]> {
+    return this.repository.find({
+      where: {
+        status: VideoStatus.PROCESSING,
+        ...(afterId && { id: MoreThan(afterId) }),
+      },
+      order: { id: 'ASC' },
       take: limit,
     });
   }

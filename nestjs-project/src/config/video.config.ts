@@ -15,4 +15,8 @@ export default registerAs('video', () => ({
   processingBackoffMs: int(process.env.VIDEO_PROCESSING_BACKOFF_MS, 10_000),
   workerConcurrency: int(process.env.WORKER_CONCURRENCY, 2),
   uploadSweepIntervalMs: int(process.env.UPLOAD_SWEEP_INTERVAL_MS, 900_000),
+  processingReconcileIntervalMs: int(
+    process.env.PROCESSING_RECONCILE_INTERVAL_MS,
+    60_000,
+  ),
 }));

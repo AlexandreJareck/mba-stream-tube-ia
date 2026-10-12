@@ -115,6 +115,40 @@ describe('Owner video read and reprocess (e2e)', () => {
       });
     });
 
+    it('reprocess-processing-republishes-the-same-run', async () => {
+      const started = await startUpload();
+      await ctx.dataSource.query(
+        `UPDATE videos SET status = 'processing', processing_run = 2, upload_id = NULL
+         WHERE id = $1`,
+        [started.id],
+      );
+      await storage.putObject(
+        `videos/${started.id}/source`,
+        Buffer.alloc(1024),
+        'video/mp4',
+        1024,
+      );
+      await queue.pause();
+      try {
+        const first = await http()
+          .post(`/channels/me/videos/${started.id}/reprocess`)
+          .set(auth())
+          .expect(200);
+        const second = await http()
+          .post(`/channels/me/videos/${started.id}/reprocess`)
+          .set(auth())
+          .expect(200);
+
+        expect(bodyOf<VideoBody>(first).processing_run).toBe(2);
+        expect(bodyOf<VideoBody>(second).processing_run).toBe(2);
+        expect(
+          await queue.getJob(`video-process-${started.id}-2`),
+        ).not.toBeNull();
+      } finally {
+        await queue.resume();
+      }
+    });
+
     it('reprocess-non-failed-is-409', async () => {
       const started = await startUpload();
 

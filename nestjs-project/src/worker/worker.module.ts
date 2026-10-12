@@ -18,8 +18,13 @@ import {
 } from '../videos/processing/upload-sweeper.service';
 import { VideoProcessingProcessor } from '../videos/processing/video-processing.processor';
 import { VideoProcessingService } from '../videos/processing/video-processing.service';
+import {
+  ProcessingReconcileScheduler,
+  ProcessingReconcilerService,
+} from '../videos/processing/processing-reconciler.service';
 import { generatePublicId } from '../videos/public-id.util';
 import { VideoQueueModule } from '../videos/video-queue.module';
+import { VideoProcessingQueue } from '../videos/video-processing.queue';
 import {
   PUBLIC_ID_GENERATOR,
   VideosRepository,
@@ -54,7 +59,10 @@ import { WorkerHeartbeatService } from './worker-heartbeat.service';
     { provide: PUBLIC_ID_GENERATOR, useValue: generatePublicId },
     MediaProbeService,
     VideoProcessingService,
+    VideoProcessingQueue,
     VideoProcessingProcessor,
+    ProcessingReconcilerService,
+    ProcessingReconcileScheduler,
     UploadSweeperService,
     UploadSweepScheduler,
     WorkerHeartbeatService,

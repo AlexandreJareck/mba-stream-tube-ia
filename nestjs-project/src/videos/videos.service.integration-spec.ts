@@ -125,4 +125,41 @@ describe('VideosService (integration: PostgreSQL + MinIO + Redis)', () => {
     expect(session.uploaded_parts).toEqual([{ part_number: 1, size: 5 * MiB }]);
     expect(session.parts.map((p) => p.part_number)).toEqual([2]);
   });
+
+  it('should converge concurrent reprocess requests on one run and job', async () => {
+    const started = await startTwoPartUpload();
+    await putToPresignedUrl(
+      started.upload.parts[0].url,
+      file.subarray(0, 5 * MiB),
+    );
+    await putToPresignedUrl(
+      started.upload.parts[1].url,
+      file.subarray(5 * MiB),
+    );
+    await service.completeUpload(userId, started.id);
+    await dataSource.query(
+      `UPDATE videos SET status = 'failed', failure_reason = 'PROCESSING_FAILED', failed_at = now()
+       WHERE id = $1`,
+      [started.id],
+    );
+    await queue.pause();
+    try {
+      const results = await Promise.all([
+        service.reprocess(userId, started.id),
+        service.reprocess(userId, started.id),
+      ]);
+
+      expect(results.map((video) => video.processing_run)).toEqual([2, 2]);
+      const row = await dataSource
+        .getRepository(Video)
+        .findOneByOrFail({ id: started.id });
+      expect(row.processing_run).toBe(2);
+      expect(await jobsForVideo(queue, started.id)).toHaveLength(2);
+      expect(
+        await queue.getJob(`video-process-${started.id}-2`),
+      ).not.toBeNull();
+    } finally {
+      await queue.resume();
+    }
+  });
 });

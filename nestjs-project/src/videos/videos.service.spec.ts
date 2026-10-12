@@ -31,6 +31,7 @@ const baseConfig = {
   processingBackoffMs: 10000,
   workerConcurrency: 2,
   uploadSweepIntervalMs: 900000,
+  processingReconcileIntervalMs: 60000,
 };
 
 describe('VideosService', () => {
@@ -341,7 +342,55 @@ describe('VideosService', () => {
       expect(result.processing_run).toBe(2);
     });
 
-    it('should refuse videos that are not failed', async () => {
+    it('should republish an already-processing run without incrementing it', async () => {
+      videos.findOwned.mockResolvedValue(
+        draft({ status: VideoStatus.PROCESSING, processing_run: 2 }),
+      );
+
+      const result = await service.reprocess('user-1', 'video-1');
+
+      expect(videos.transition).not.toHaveBeenCalled();
+      expect(queue.enqueueProcessing).toHaveBeenCalledWith('video-1', 2);
+      expect(result.processing_run).toBe(2);
+    });
+
+    it('should recover an enqueue failure by republishing the same run', async () => {
+      videos.findOwned
+        .mockResolvedValueOnce(
+          draft({ status: VideoStatus.FAILED, processing_run: 1 }),
+        )
+        .mockResolvedValueOnce(
+          draft({ status: VideoStatus.PROCESSING, processing_run: 2 }),
+        );
+      queue.enqueueProcessing
+        .mockRejectedValueOnce(new Error('redis down'))
+        .mockResolvedValueOnce(undefined);
+
+      await expect(service.reprocess('user-1', 'video-1')).rejects.toThrow(
+        'redis down',
+      );
+      await expect(
+        service.reprocess('user-1', 'video-1'),
+      ).resolves.toMatchObject({ processing_run: 2 });
+
+      expect(videos.transition).toHaveBeenCalledTimes(1);
+      expect(queue.enqueueProcessing).toHaveBeenNthCalledWith(1, 'video-1', 2);
+      expect(queue.enqueueProcessing).toHaveBeenNthCalledWith(2, 'video-1', 2);
+    });
+
+    it('should converge after losing a concurrent failed-to-processing race', async () => {
+      videos.findOwned.mockResolvedValue(
+        draft({ status: VideoStatus.FAILED, processing_run: 1 }),
+      );
+      videos.transition.mockResolvedValue(false);
+
+      const result = await service.reprocess('user-1', 'video-1');
+
+      expect(result.processing_run).toBe(2);
+      expect(queue.enqueueProcessing).toHaveBeenCalledWith('video-1', 2);
+    });
+
+    it('should refuse videos that are neither failed nor processing', async () => {
       videos.findOwned.mockResolvedValue(draft({ status: VideoStatus.READY }));
 
       await expect(

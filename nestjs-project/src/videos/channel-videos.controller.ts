@@ -201,13 +201,14 @@ export class ChannelVideosController {
   @Post(':id/reprocess')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Reprocess a failed video',
+    summary: 'Reprocess or recover a video processing run',
     description:
-      'Starts a new processing run for a failed video whose source file is still stored.',
+      'Starts one new run for a failed video whose source still exists. Repeating the request while processing safely republishes the same deterministic job without incrementing processing_run.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Video is processing again (processing_run incremented)',
+    description:
+      'Video is processing; processing_run is incremented only when entering from failed',
     type: VideoResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Invalid id', schema: ERROR_SCHEMA })
@@ -224,7 +225,7 @@ export class ChannelVideosController {
   @ApiResponse({
     status: 409,
     description:
-      'Video is not failed (INVALID_VIDEO_STATUS) or its source is gone (VIDEO_SOURCE_MISSING)',
+      'Video is neither failed nor processing (INVALID_VIDEO_STATUS), or its source is gone (VIDEO_SOURCE_MISSING)',
     schema: ERROR_SCHEMA,
   })
   @ApiResponse({

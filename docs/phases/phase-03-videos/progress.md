@@ -242,7 +242,7 @@ The acceptance review against the assignment found three remaining gaps, closed 
 - Reprocess is now idempotent for `processing`, repairs enqueue failure with the same `processing_run`, and concurrent `failed → processing` requests converge on one run/job.
 - Infrastructure-backed module tests were renamed to `*.integration-spec.ts`.
 - Plan contracts now include `400 VALIDATION_ERROR` for invalid UUIDs on upload completion and reprocess.
-- Context7 MCP retrospective verification is **not complete**: although configured, this execution session exposed neither the `context7` server nor its tools. No HTTP fallback was used; see `library-refs.md`.
+- Context7 MCP retrospective verification is **complete** (2026-10-12): this session used the configured `mcp__context7` server to query `/taskforcesh/bullmq`, `/aws/aws-sdk-js-v3`, and `/nestjs/docs.nestjs.com`. Installed lockfile versions and the queue, storage, reconciliation, and worker lifecycle implementations were checked; no code incompatibility was found. The obsolete session-availability blocker and full evidence are recorded in `library-refs.md`; the original Phase 03 HTTP-API research disclosure remains unchanged.
 - Worker/tool error details redact HTTP(S) URLs before logging, preventing presigned storage credentials from appearing in logs.
 
 ### Remediation verification

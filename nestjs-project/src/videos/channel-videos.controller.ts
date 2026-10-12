@@ -168,4 +168,74 @@ export class ChannelVideosController {
   ): Promise<VideoResponseDto> {
     return this.videosService.completeUpload(user.sub, id);
   }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Get one of my videos',
+    description:
+      'Returns a video of the caller channel in any status (draft, processing, ready, failed) — used to poll processing.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The video',
+    type: VideoResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid id', schema: ERROR_SCHEMA })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid access token',
+    schema: ERROR_SCHEMA,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found on the caller channel (VIDEO_NOT_FOUND)',
+    schema: ERROR_SCHEMA,
+  })
+  async findOne(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<VideoResponseDto> {
+    return this.videosService.findOwnedVideo(user.sub, id);
+  }
+
+  @Post(':id/reprocess')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reprocess a failed video',
+    description:
+      'Starts a new processing run for a failed video whose source file is still stored.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Video is processing again (processing_run incremented)',
+    type: VideoResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid id', schema: ERROR_SCHEMA })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid access token',
+    schema: ERROR_SCHEMA,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found on the caller channel (VIDEO_NOT_FOUND)',
+    schema: ERROR_SCHEMA,
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Video is not failed (INVALID_VIDEO_STATUS) or its source is gone (VIDEO_SOURCE_MISSING)',
+    schema: ERROR_SCHEMA,
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'Queue unavailable (QUEUE_UNAVAILABLE)',
+    schema: ERROR_SCHEMA,
+  })
+  async reprocess(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<VideoResponseDto> {
+    return this.videosService.reprocess(user.sub, id);
+  }
 }

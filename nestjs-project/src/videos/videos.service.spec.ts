@@ -7,6 +7,7 @@ import {
   UploadIncompleteException,
   UploadSizeMismatchException,
   VideoNotFoundException,
+  VideoSourceMissingException,
   VideoTooLargeException,
 } from '../common/exceptions/domain.exception';
 import videoConfig from '../config/video.config';
@@ -311,6 +312,51 @@ describe('VideosService', () => {
 
       expect(result.status).toBe(VideoStatus.PROCESSING);
       expect(queue.enqueueProcessing).toHaveBeenCalledWith('video-1', 1);
+    });
+  });
+
+  describe('reprocess', () => {
+    beforeEach(() => {
+      storage.headObject.mockResolvedValue({ size: 10 });
+      videos.transition.mockResolvedValue(true);
+      videos.findById.mockResolvedValue(
+        draft({ status: VideoStatus.PROCESSING, processing_run: 2 }),
+      );
+    });
+
+    it('should start a new run for a failed video and publish it', async () => {
+      videos.findOwned.mockResolvedValue(
+        draft({ status: VideoStatus.FAILED, processing_run: 1 }),
+      );
+
+      const result = await service.reprocess('user-1', 'video-1');
+
+      expect(videos.transition).toHaveBeenCalledWith(
+        'video-1',
+        VideoStatus.FAILED,
+        VideoStatus.PROCESSING,
+        expect.objectContaining({ incrementRun: true }),
+      );
+      expect(queue.enqueueProcessing).toHaveBeenCalledWith('video-1', 2);
+      expect(result.processing_run).toBe(2);
+    });
+
+    it('should refuse videos that are not failed', async () => {
+      videos.findOwned.mockResolvedValue(draft({ status: VideoStatus.READY }));
+
+      await expect(
+        service.reprocess('user-1', 'video-1'),
+      ).rejects.toBeInstanceOf(InvalidVideoStatusException);
+    });
+
+    it('should refuse when the source object is gone', async () => {
+      videos.findOwned.mockResolvedValue(draft({ status: VideoStatus.FAILED }));
+      storage.headObject.mockResolvedValue(null);
+
+      await expect(
+        service.reprocess('user-1', 'video-1'),
+      ).rejects.toBeInstanceOf(VideoSourceMissingException);
+      expect(videos.transition).not.toHaveBeenCalled();
     });
   });
 });

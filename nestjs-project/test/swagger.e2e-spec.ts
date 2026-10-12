@@ -79,6 +79,45 @@ describe('Swagger endpoints (e2e)', () => {
       });
     });
 
+    it('GET /api/docs-json documents every video operation', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/docs-json')
+        .expect(200);
+      const doc = res.body as {
+        paths: Record<string, Record<string, unknown>>;
+        components: { schemas: Record<string, unknown> };
+      };
+
+      const operations = Object.entries(doc.paths)
+        .filter(([path]) => path.includes('videos'))
+        .flatMap(([path, methods]) =>
+          Object.keys(methods).map(
+            (method) => `${method.toUpperCase()} ${path}`,
+          ),
+        )
+        .sort();
+      expect(operations).toEqual([
+        'GET /channels/me/videos/{id}',
+        'GET /channels/me/videos/{id}/upload',
+        'GET /videos/{publicId}',
+        'GET /videos/{publicId}/download',
+        'GET /videos/{publicId}/stream',
+        'GET /videos/{publicId}/thumbnail',
+        'POST /channels/me/videos',
+        'POST /channels/me/videos/{id}/reprocess',
+        'POST /channels/me/videos/{id}/upload/complete',
+      ]);
+      expect(Object.keys(doc.components.schemas)).toEqual(
+        expect.arrayContaining([
+          'CreateVideoDto',
+          'VideoUploadResponseDto',
+          'UploadSessionResponseDto',
+          'VideoResponseDto',
+          'PublicVideoResponseDto',
+        ]),
+      );
+    });
+
     it('GET /api/docs-yaml returns 200 with YAML content', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/docs-yaml')

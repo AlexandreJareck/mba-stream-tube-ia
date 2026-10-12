@@ -13,6 +13,9 @@ docker compose ps   # all services must show status "running"
 Then verify each infrastructure service is actually ready to accept connections — not just running:
 
 - **PostgreSQL:** `docker compose exec db pg_isready -U streamtube` — expect `accepting connections`
+- **Redis:** `docker compose exec redis redis-cli ping` — expect `PONG`
+- **MinIO:** `docker compose ps minio` shows `healthy`; `docker compose ps -a minio-init` shows `Exited (0)` (bucket created, private)
+- **Video worker:** `docker compose ps worker` shows `healthy` (heartbeat file refreshed every 10 s while PostgreSQL and Redis answer). On a fresh clone the worker waits until `node_modules` exists — run `docker compose exec nestjs-api npm install` first.
 
 Only start the NestJS dev server (`npm run start:dev`) when the user **explicitly** asks to run the application — never as part of "start the environment".
 
@@ -32,8 +35,15 @@ docker compose exec nestjs-api npm run start:dev
 ```
 
 Services:
-- `nestjs-api` — NestJS API, port `3000`
+- `nestjs-api` — NestJS API, port `3000` (idle container; start the server explicitly)
+- `worker` — standalone video worker (`src/worker.ts`, `npm run start:worker`), consumes the `video-processing` BullMQ queue with ffprobe/ffmpeg; starts automatically
 - `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
+- `mailpit` — SMTP `1025`, UI `8025`
+- `minio` — S3-compatible storage, API `9000`, console `9001`, root user/password from `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` (dev defaults `streamtube` / `streamtube-dev-secret`); image `bitnamilegacy/minio` (official `minio/minio` images are no longer publicly pullable)
+- `minio-init` — one-shot `mc` job creating the private bucket `S3_BUCKET` (`streamtube-videos`)
+- `redis` — Redis 7.4 for BullMQ (`noeviction`), port `6379`
+
+`ffmpeg`/`ffprobe` are installed in the dev image (`Dockerfile.dev`), so they are available in both `nestjs-api` (tests) and `worker`. After changing worker code, restart it: `docker compose restart worker`.
 
 All verification and teardown commands run on the **host machine**:
 
@@ -62,6 +72,10 @@ docker compose down
 npm run start:dev                        # Dev server with hot-reload
 npm run build                            # Compile to dist/
 npm run start:prod                       # Run compiled build
+npm run start:worker                     # Video worker (ts-node); normally run by the `worker` service
+npm run start:worker:prod                # Compiled video worker (node dist/worker)
+npm run openapi:export                   # Regenerate openapi.json after changing routes/DTOs
+npx ts-node --transpile-only scripts/acceptance/ten-gib-boundary.ts   # 10 GiB upload acceptance procedure (needs ~10 GiB free in the minio volume)
 
 npm test                                 # Unit tests
 npm run test:watch                       # Unit tests in watch mode
@@ -94,6 +108,17 @@ docker compose exec nestjs-api npm run test:e2e   # already configured
 Parallel execution causes FK violations, deadlocks, and cross-suite contamination because suites truncate or seed shared tables concurrently.
 
 During active development, run only the tests related to the file being changed (`npm test -- path/to/file.spec.ts`). Before declaring a task done, run the full suite — see the global `CLAUDE.md` → "Definition of Done (Technical)".
+
+## Videos (Phase 03)
+
+Implemented in `src/videos/` (API), `src/videos/processing/` + `src/worker/` (worker) and `src/storage/` (S3/MinIO adapter). Plan: `docs/phases/phase-03-videos/phase-03-videos.md`; decisions: `docs/decisions/technical-decisions-phase-03-videos.md`.
+
+- Owner routes (JWT, caller's channel): `POST /channels/me/videos` (draft + presigned multipart part URLs), `GET /channels/me/videos/:id`, `GET /channels/me/videos/:id/upload` (resume: uploaded parts + fresh URLs for missing ones), `POST /channels/me/videos/:id/upload/complete` (idempotent), `POST /channels/me/videos/:id/reprocess` (failed → processing).
+- Public routes (`@Public()`, `@SkipThrottle()`, `ready` videos only): `GET /videos/:publicId`, `/thumbnail`, `/stream` (Range/206/416), `/download` (attachment).
+- Lifecycle `draft → processing → ready | failed` enforced by compare-and-set updates in `VideosRepository.transition`; `processing_run` increments on every entry into `processing`.
+- Queue `video-processing` (BullMQ): job `video.process` payload `{ version: 1, videoId, processingRun }`, id `video-process-{videoId}-{processingRun}`, 3 attempts with exponential backoff, failed jobs kept 7 days; scheduled job `uploads.sweep` (every `UPLOAD_SWEEP_INTERVAL_MS`) expires abandoned drafts (`failed/UPLOAD_EXPIRED`).
+- Limits: `size_bytes` ≤ 10737418240 (10 GiB), parts of `VIDEO_UPLOAD_PART_SIZE_BYTES` (64 MiB), content types `video/mp4|quicktime|webm|x-matroska`.
+- Presigned client URLs are signed for `S3_PUBLIC_ENDPOINT`; tests running inside the container sign them for the internal endpoint (`src/test/storage.ts`).
 
 ## Long-running Processes
 

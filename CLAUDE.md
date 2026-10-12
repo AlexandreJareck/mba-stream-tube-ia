@@ -12,18 +12,18 @@ This is a monorepo with two main areas:
 
 - `nestjs-project/` — Backend API (NestJS 11, TypeScript, Express). Contains modules for users, channels, videos, comments, etc.
 - `docs/` — Project documentation, architecture diagrams, and planning.
-- `next-frontend/` (Next.js) — not yet initialized
+- `next-frontend/` — Frontend (Next.js) with the Phase 01–02 screens; see `next-frontend/CLAUDE.md`. Video UI is out of Phase 03 scope.
 
 ## Architecture (C4 Container Diagram)
 
 See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
 
-- **Frontend** (Next.js) → calls API via REST, streams from Object Storage
-- **API** (Nest.js) → business rules, auth, reads/writes DB, uploads to storage, publishes jobs to queue, sends emails
-- **Video Worker** (FFmpeg) → consumes jobs from queue, processes videos, updates DB and storage
-- **Database** (PostgreSQL) → users, channels, videos, comments, likes
-- **Object Storage** (S3/MinIO) → video files and thumbnails
-- **Message Queue** (TBD) → video processing job queue
+- **Frontend** (Next.js) → calls API via REST; uploads video parts directly to Object Storage through presigned URLs; plays/downloads videos through the API stream routes (Phase 03 decision `phase-03-videos/TD-08`)
+- **API** (Nest.js) → business rules, auth, reads/writes DB, opens multipart uploads and presigns part URLs (never receives video bytes), proxies Range/206 streaming and downloads from storage, publishes jobs to the queue, sends emails
+- **Video Worker** (Nest.js standalone app + FFmpeg, `nestjs-project/src/worker.ts`, Compose service `worker`) → consumes `video.process` jobs, extracts duration/metadata with ffprobe, generates the thumbnail with ffmpeg, updates DB and storage; also expires abandoned uploads (`uploads.sweep`)
+- **Database** (PostgreSQL) → users, channels, videos (comments and likes in later phases)
+- **Object Storage** (S3-compatible; MinIO locally as Compose service `minio`, private bucket `streamtube-videos`) → video files (`videos/{id}/source`) and thumbnails (`videos/{id}/thumbnail.jpg`)
+- **Message Queue** (BullMQ on Redis, Compose service `redis`) → `video-processing` queue
 - **Email Service** (SMTP) → account confirmation and password recovery
 
 ## Docker Networking

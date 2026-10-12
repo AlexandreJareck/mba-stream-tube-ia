@@ -1,5 +1,14 @@
-import { Controller, Get, Header, Param, StreamableFile } from '@nestjs/common';
 import {
+  Controller,
+  Get,
+  Header,
+  Headers,
+  Param,
+  Res,
+  StreamableFile,
+} from '@nestjs/common';
+import {
+  ApiHeader,
   ApiOperation,
   ApiProduces,
   ApiResponse,
@@ -7,10 +16,25 @@ import {
   getSchemaPath,
 } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
+import type { Response } from 'express';
 import { Public } from '../auth/decorators/public.decorator';
 import { ApiErrorEnvelope } from '../common/openapi/api-error-envelope.dto';
+import { attachmentDisposition } from './content-disposition.util';
 import { PublicVideoResponseDto } from './dto/public-video-response.dto';
-import { VideoPlaybackService } from './video-playback.service';
+import {
+  VideoPlaybackService,
+  type VideoSourceStream,
+} from './video-playback.service';
+
+const RANGE_HEADER_DOC = {
+  name: 'Range',
+  required: false,
+  description:
+    'Single byte range per RFC 9110, e.g. `bytes=0-1048575`, `bytes=1000-` or `bytes=-500`. Invalid or multi-range values are ignored (full 200 response).',
+};
+const VIDEO_BINARY = {
+  'video/*': { schema: { type: 'string', format: 'binary' } },
+};
 
 const ERROR_SCHEMA = { $ref: getSchemaPath(ApiErrorEnvelope) };
 
@@ -72,6 +96,98 @@ export class VideosController {
     return new StreamableFile(image.body, {
       type: image.contentType,
       length: image.contentLength,
+    });
+  }
+
+  @Get(':publicId/stream')
+  @ApiOperation({
+    summary: 'Stream a video',
+    description:
+      'Pipes the video from object storage without buffering. Honors a single byte Range so players can start before the whole file is downloaded.',
+  })
+  @ApiHeader(RANGE_HEADER_DOC)
+  @ApiResponse({
+    status: 200,
+    description: 'Whole video (no or unusable Range); Accept-Ranges: bytes',
+    content: VIDEO_BINARY,
+  })
+  @ApiResponse({
+    status: 206,
+    description: 'Partial content with Content-Range: bytes start-end/size',
+    content: VIDEO_BINARY,
+  })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Unknown or not ready (VIDEO_NOT_FOUND) or source file missing (VIDEO_SOURCE_MISSING)',
+    schema: ERROR_SCHEMA,
+  })
+  @ApiResponse({
+    status: 416,
+    description:
+      'Range outside the file (RANGE_NOT_SATISFIABLE); Content-Range: bytes */size',
+    schema: ERROR_SCHEMA,
+  })
+  async stream(
+    @Param('publicId') publicId: string,
+    @Headers('range') range: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const source = await this.playback.openSource(publicId, range);
+    return this.send(res, source);
+  }
+
+  @Get(':publicId/download')
+  @ApiOperation({
+    summary: 'Download a video',
+    description:
+      'Same as streaming but with attachment semantics (Content-Disposition); Range is honored for resumable downloads.',
+  })
+  @ApiHeader(RANGE_HEADER_DOC)
+  @ApiResponse({
+    status: 200,
+    description: 'Whole file as an attachment',
+    content: VIDEO_BINARY,
+  })
+  @ApiResponse({
+    status: 206,
+    description: 'Partial content of the attachment',
+    content: VIDEO_BINARY,
+  })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Unknown or not ready (VIDEO_NOT_FOUND) or source file missing (VIDEO_SOURCE_MISSING)',
+    schema: ERROR_SCHEMA,
+  })
+  @ApiResponse({
+    status: 416,
+    description: 'Range outside the file (RANGE_NOT_SATISFIABLE)',
+    schema: ERROR_SCHEMA,
+  })
+  async download(
+    @Param('publicId') publicId: string,
+    @Headers('range') range: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const source = await this.playback.openSource(publicId, range);
+    res.setHeader(
+      'Content-Disposition',
+      attachmentDisposition(source.originalFilename),
+    );
+    return this.send(res, source);
+  }
+
+  /** HTTP-level mapping of a playback stream (status and range headers). */
+  private send(res: Response, source: VideoSourceStream): StreamableFile {
+    res.status(source.status);
+    res.setHeader('Accept-Ranges', 'bytes');
+    if (source.contentRange) {
+      res.setHeader('Content-Range', source.contentRange);
+    }
+    return new StreamableFile(source.body, {
+      type: source.contentType,
+      length: source.contentLength,
     });
   }
 }

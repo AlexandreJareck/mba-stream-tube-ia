@@ -5,6 +5,7 @@ import {
   EmailNotConfirmedException,
   InvalidCredentialsException,
   InvalidTokenException,
+  RangeNotSatisfiableException,
   TokenExpiredException,
   TokenReuseDetectedException,
 } from '../exceptions/domain.exception';
@@ -96,6 +97,25 @@ describe('DomainExceptionFilter', () => {
       statusCode: 401,
       error: 'TOKEN_REUSE_DETECTED',
       message: expect.any(String),
+    });
+  });
+
+  it('adds Content-Range with the representation size to a 416', () => {
+    const setHeader = jest.fn();
+    const host = {
+      switchToHttp: () => ({
+        getResponse: () => ({ status: mockStatus, setHeader }),
+      }),
+    } as unknown as ArgumentsHost;
+
+    filter.catch(new RangeNotSatisfiableException(1234), host);
+
+    expect(setHeader).toHaveBeenCalledWith('Content-Range', 'bytes */1234');
+    expect(mockStatus).toHaveBeenCalledWith(416);
+    expect(mockJson).toHaveBeenCalledWith({
+      statusCode: 416,
+      error: 'RANGE_NOT_SATISFIABLE',
+      message: 'Requested range not satisfiable',
     });
   });
 });

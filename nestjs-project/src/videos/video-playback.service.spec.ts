@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { Test } from '@nestjs/testing';
 import {
+  RangeNotSatisfiableException,
   VideoNotFoundException,
   VideoSourceMissingException,
 } from '../common/exceptions/domain.exception';
@@ -100,6 +101,69 @@ describe('VideoPlaybackService', () => {
       await expect(service.openThumbnail('abcdefghijk')).rejects.toBeInstanceOf(
         VideoSourceMissingException,
       );
+    });
+  });
+
+  describe('openSource', () => {
+    beforeEach(() => {
+      videos.findReadyByPublicId.mockResolvedValue({
+        ...ready,
+        original_filename: 'clip.mp4',
+      });
+      storage.getObjectStream.mockResolvedValue({
+        body: Readable.from(['x']),
+        contentLength: 0,
+      });
+    });
+
+    it('should stream the whole object with 200 when there is no Range', async () => {
+      const result = await service.openSource('abcdefghijk', undefined);
+
+      expect(storage.getObjectStream).toHaveBeenCalledWith(
+        'videos/video-1/source',
+        undefined,
+      );
+      expect(result).toMatchObject({
+        status: 200,
+        contentLength: 1000,
+        contentType: 'video/mp4',
+        originalFilename: 'clip.mp4',
+      });
+      expect(result.contentRange).toBeUndefined();
+    });
+
+    it('should stream only the requested slice with 206', async () => {
+      const result = await service.openSource('abcdefghijk', 'bytes=100-199');
+
+      expect(storage.getObjectStream).toHaveBeenCalledWith(
+        'videos/video-1/source',
+        { kind: 'partial', start: 100, end: 199 },
+      );
+      expect(result).toMatchObject({
+        status: 206,
+        contentLength: 100,
+        contentRange: 'bytes 100-199/1000',
+      });
+    });
+
+    it('should reject a range beyond the file with its size', async () => {
+      const error = await service
+        .openSource('abcdefghijk', 'bytes=1000-')
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(RangeNotSatisfiableException);
+      expect((error as RangeNotSatisfiableException).sizeBytes).toBe(1000);
+      expect(storage.getObjectStream).not.toHaveBeenCalled();
+    });
+
+    it('should report a missing source object as VIDEO_SOURCE_MISSING', async () => {
+      storage.getObjectStream.mockRejectedValue(
+        new StorageObjectNotFoundError('k'),
+      );
+
+      await expect(
+        service.openSource('abcdefghijk', undefined),
+      ).rejects.toBeInstanceOf(VideoSourceMissingException);
     });
   });
 });

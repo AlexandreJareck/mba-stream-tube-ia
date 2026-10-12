@@ -19,6 +19,37 @@ services:
       minio-init:
         condition: service_completed_successfully
 
+  # Standalone video worker (phase-03-videos/TD-04): consumes video-processing
+  # jobs with ffprobe/ffmpeg. Same image/bind mount as the API; it waits for the
+  # dependencies installed by `docker compose exec nestjs-api npm install`.
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command:
+      - sh
+      - -c
+      - until [ -f node_modules/.package-lock.json ]; do echo "worker waiting for node_modules"; sleep 5; done; exec npm run start:worker
+    volumes:
+      - .:/home/node/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      # The heartbeat file is refreshed every 10 s only while PostgreSQL and Redis answer.
+      test: ["CMD-SHELL", "test -f /tmp/worker-heartbeat && [ $$(( $$(date +%s) - $$(stat -c %Y /tmp/worker-heartbeat) )) -lt 30 ]"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 240s
+    restart: unless-stopped
+
   db:
     image: postgres:17
     ports:

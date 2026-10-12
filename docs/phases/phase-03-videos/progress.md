@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
-**Status:** in progress
-**SIs:** 10/18 completed
+**Status:** completed — 18/18 SIs; one Definition of Done item open: `npm run lint` fails on 150 pre-existing errors (see Final verification)
+**SIs:** 18/18 completed
 **Branch:** `feature/phase-03-videos` (from local `dev`)
 
 ## Stage 0 — Baseline (2026-10-11)
@@ -85,3 +85,147 @@
 - **Observations:**
   - `@nestjs/bullmq@12.0.0` is ESM-only → pinned `^11.0.5` (CommonJS, peer `bullmq ^6`); `bullmq@6` no longer bundles `ioredis` → added `ioredis@^5.11.1`. Recorded as TD-01 Revisions (commit `d461473`).
   - API-side queue connection uses `enableOfflineQueue: false` so a Redis outage yields `503 QUEUE_UNAVAILABLE` instead of a hanging request.
+
+### SI-03.11 — MediaProbeService
+- **Status:** completed
+- **Tests:** 12 passing (unit parser/timestamp 9; integration with real FFmpeg 3: fixture probe 3 s/320x240/h264+aac, 640x480 JPEG thumbnail, text file → `InvalidMediaError`)
+- **Observations:**
+  - Fixture `test/fixtures/sample.mp4` (40 KB) generated with FFmpeg in the container; command in `test/fixtures/README.md`; `*.mp4 binary` in `.gitattributes`.
+
+### SI-03.12 — Worker FFmpeg em contêiner separado
+- **Status:** completed
+- **Tests:** unit `video-processing.service.spec.ts` 7; integration `video-processing.integration-spec.ts` 3 (real PostgreSQL + MinIO + Redis + FFmpeg with the WorkerModule consuming: fixture → `ready` with metadata and thumbnail object; invalid media → `failed/INVALID_MEDIA` with `attemptsMade = 1`; redelivery after `ready` skipped); `worker.module.spec.ts` 1
+- **Observations:**
+  - `bullmq@6` no longer exposes `Queue.client`; the heartbeat probes Redis with `getJobCounts`.
+  - Worker runs via `ts-node --transpile-only` in dev so it never races `nest start` over `dist/`; restart the `worker` service after code changes.
+  - `docker compose ps` shows `worker` healthy; `VideoProcessingProcessor` is only registered in `WorkerModule`.
+  - Known limitation: if the worker dies between the final failed attempt and the `failed` event handler, the video stays `processing` (BullMQ keeps the job in the failed set; recovery requires a manual DB fix — documented in the final report).
+
+### SI-03.13 — Endpoints do dono: consultar e reprocessar
+- **Status:** completed
+- **Tests:** unit `videos.service.spec.ts` (reprocess 3, total 20); e2e `videos-owner.e2e-spec.ts` 4 (spec `videos-owner.plan.md` 1.1–1.4)
+- **Observations:** none
+
+### SI-03.14 — Endpoints públicos: busca e thumbnail
+- **Status:** completed
+- **Tests:** unit `video-playback.service.spec.ts` 5; e2e `videos-public.e2e-spec.ts` 4 (spec 1.1–1.4)
+- **Observations:** none
+
+### SI-03.15 — Endpoints públicos: streaming Range/206 e download
+- **Status:** completed
+- **Tests:** unit `video-playback.service.spec.ts` (+4, total 9), `content-disposition.util.spec.ts` 4, `domain-exception.filter.spec.ts` (+1); e2e `videos-stream.e2e-spec.ts` 5 (spec 1.1–1.5: byte-exact 206 slice, 200 full, 416 with `Content-Range: bytes */size`, download SHA-256 identical, non-ready 404)
+- **Observations:** none
+
+### SI-03.16 — Limpeza de uploads abandonados
+- **Status:** completed
+- **Tests:** integration `upload-sweeper.service.integration-spec.ts` 3 (expired draft → `failed/UPLOAD_EXPIRED` + multipart aborted; fresh draft untouched; second pass no-op; job scheduler `uploads-sweep` registered)
+- **Observations:** none
+
+### SI-03.17 — Fluxo e2e, OpenAPI e aceitação de 10 GiB
+- **Status:** completed
+- **Tests:** e2e `videos.e2e-spec.ts` 1 (full flow on the real stack), `swagger.e2e-spec.ts` +1 (9 video operations and schemas)
+- **Observations:**
+  - `openapi.json` regenerated (`npm run openapi:export`).
+  - 10 GiB acceptance: `scripts/acceptance/ten-gib-boundary.ts` → **PASS**; evidence in `acceptance-10gib.md` (10737418241 → 400; 10737418240 → 160 × 64 MiB; object assembled with 10737418240 bytes; API received 344 bytes of JSON).
+
+### SI-03.18 — Documentação e instruções de agente
+- **Status:** completed
+- **Tests:** no tests (documentation)
+- **Observations:**
+  - Root `CLAUDE.md`, `nestjs-project/CLAUDE.md` and `docs/diagrams/software-arch.mermaid` updated with what exists. `AGENTS.md` not created: the phase was executed with Claude Code (no Codex port required by the execution prompt rule 3).
+
+## Stage 4 — Completion: specification review (item by item)
+
+Evidence keys: **T** = automated test (file), **A** = acceptance procedure, **C** = code/config, **D** = doc.
+
+### §4.1 Starting an upload
+| Criterion | Status | Evidence |
+|---|---|---|
+| Global JWT guard | ✅ | C `ChannelVideosController` (no `@Public`); T `videos-create.e2e-spec` requires-authentication |
+| Resolve user's channel, video owned by it | ✅ | C `ChannelsService.findByUserId`; T `videos-create.e2e-spec` 1.1 (row `channel_id` = user's channel) |
+| Initial record in `draft` | ✅ | T `videos-create.e2e-spec` 1.1, `video.entity.integration-spec` |
+| Minimum metadata (title, type/size) | ✅ | C `CreateVideoDto`; T e2e 1.2/1.3 |
+| Storage key + unique public id | ✅ | C `buildStorageKeys`, `VideosRepository.insertDraft`; T `videos.repository.integration-spec` (collision retry) |
+| Direct multipart presigned strategy for 10 GB | ✅ | T `storage.service.integration-spec`, `videos-upload.e2e-spec`; A `acceptance-10gib.md` |
+| API never holds/proxies the binary | ✅ | A — API received 344 bytes for a 10737418240-byte object |
+
+### §4.2 Completing an upload
+| Criterion | Status | Evidence |
+|---|---|---|
+| Verify upload exists and is complete in storage | ✅ | C `assembleObject` (ListParts + HeadObject); T `videos-upload.e2e-spec` 1.2 (UPLOAD_INCOMPLETE), unit size mismatch |
+| Idempotent completion, no duplicate jobs | ✅ | T `videos-upload.e2e-spec` 1.3, `videos.service.integration-spec`, `video-processing.queue.integration-spec` |
+| `draft → processing` + publish message | ✅ | T same as above |
+| Abandoned uploads / orphaned parts / expired URLs | ✅ | C sweeper + MinIO stale expiry; `GET …/upload` re-signs; T `upload-sweeper.service.integration-spec`, `videos-upload.e2e-spec` 1.5 |
+
+### §4.3 Asynchronous processing
+| Criterion | Status | Evidence |
+|---|---|---|
+| Separate process/container | ✅ | C Compose `worker` (healthy), `src/worker.ts`; processor only in `WorkerModule` |
+| Real queue | ✅ | BullMQ/Redis; T `video-processing.integration-spec` |
+| Controlled input access, no full load in memory | ✅ | C ffprobe/ffmpeg over presigned URL (Range); A worker finished the 10 GiB object in ~2 s |
+| Duration + metadata via ffprobe | ✅ | T `media-probe.service.integration-spec`, `video-processing.integration-spec` |
+| Deterministic thumbnail stored in object storage | ✅ | C `thumbnailTimestamp`; T `video-processing.integration-spec` (object `videos/{id}/thumbnail.jpg`) |
+| Persist duration, metadata, thumbnail key, `ready` | ✅ | T `video-processing.integration-spec`, `videos.e2e-spec` |
+| `failed` + operational info, nothing internal exposed | ✅ | C `failure_reason` codes only, details in logs; T invalid media → `INVALID_MEDIA` |
+| Retries, backoff, idempotency, dedup, DLQ | ✅ | C job options (3 attempts, exponential), jobId per run, failed set 7 days; T invalid media `attemptsMade = 1`, redelivery skipped |
+
+### §4.4 Video access
+| Criterion | Status | Evidence |
+|---|---|---|
+| Lookup by public id | ✅ | T `videos-public.e2e-spec` |
+| Range honored/validated, 206 + headers | ✅ | T `range.util.spec`, `videos-stream.e2e-spec` 1.1–1.3 |
+| Download with attachment semantics per auth matrix | ✅ | T `videos-stream.e2e-spec` 1.4 |
+| Swagger/OpenAPI documented | ✅ | T `swagger.e2e-spec` (9 operations); `openapi.json` |
+| Explicit redirect-vs-proxy decision | ✅ | D TD-08 (proxy) + IC-1 note |
+| Non-ready never served as ready | ✅ | T `videos-public` 1.2, `videos-stream` 1.5 |
+
+### §5 Persistence
+| Criterion | Status | Evidence |
+|---|---|---|
+| UUID, FK to channels, title, status, unique public id, object key, nullable thumbnail/duration/metadata, timestamps, failure/reprocess info | ✅ | C entity + migration; T `video.entity.integration-spec`, `migrations.integration-spec` |
+| Constraints, indexes, FK, safe rollback | ✅ | T `migrations.integration-spec` (revert drops table and enum) |
+
+### §6–§8 Decisions and contracts
+| Criterion | Status | Evidence |
+|---|---|---|
+| 10 research topics with options/trade-offs/recommendation/consequences | ✅ | D `technical-decisions-phase-03-videos.md` (TD-01..TD-11) |
+| Pipeline artifacts, `validation.md` clean before implementation | ✅ | D `context.md`, `validation.md` (clean at commit `c1daa85`/`5df8a65`, before the first code commit), `library-refs.md`, plan, specs |
+| Contracts (routes, DTOs, codes, auth, errors, transitions, tx boundaries, health checks, limits, cleanup, observability) | ✅ | D plan Tech Specs; logs carry `videoId`/`jobId`, no signed URLs or credentials |
+
+### §9 Infrastructure
+| Criterion | Status | Evidence |
+|---|---|---|
+| MinIO + bucket init, queue, worker, health checks, service names | ✅ | C `compose.yaml`; clean-environment `docker compose ps` (all healthy, `minio-init` exited 0) |
+| `.env.example` documented, no real secrets | ✅ | C `.env.example` (dev placeholders only) |
+
+### §10 Testing
+| Criterion | Status | Evidence |
+|---|---|---|
+| Unit: transitions, ids/keys, validation, Range, idempotency, failures | ✅ | `*.spec.ts` under `src/videos` |
+| Integration: real PostgreSQL, MinIO, queue, FFmpeg | ✅ | `*.integration-spec.ts` under `src/videos`, `src/storage` |
+| E2E: auth, upload, processing to ready, thumbnail, lookup, partial streaming, download, auth/errors | ✅ | `test/videos*.e2e-spec.ts` |
+| No 10 GB file in suite + reproducible 10 GB procedure | ✅ | A `acceptance-10gib.md` |
+
+## Final verification (clean environment, 2026-10-12)
+
+Procedure: `docker compose down -v` → `docker compose up -d --build` → `npm install` → `npm run migration:run` (3 migrations applied on an empty DB) → suites.
+
+| Check | Result |
+|---|---|
+| `docker compose ps` | db, mailpit, minio, redis, worker **healthy**; minio-init **Exited (0)**; nestjs-api up |
+| `npm test -- --runInBand` | **exit 0 — 43/43 suites, 291/291 tests** |
+| `npm run test:e2e` | **exit 0 — 9/9 suites, 76/76 tests** |
+| `npx tsc --noEmit` | **exit 0** |
+| `npm run lint` | **exit 1 — 150 errors, 40 warnings, all in files that predate Phase 03** (baseline: identical 150/40 in the same 11 files); zero lint problems in Phase 03 files |
+| 10 GiB acceptance | **PASS** (`acceptance-10gib.md`) |
+
+Fixes made during final verification (each its own commit): e2e now runs in band (`maxWorkers: 1` — parallel suites wiped each other's tables; `nestjs-project/CLAUDE.md` already claimed this), tests no longer remove BullMQ jobs held by the live `worker` container, typed binary parser, OpenAPI export hook timeout.
+
+## Open items / limitations
+
+- **Lint (DoD):** `npm run lint` still fails because of 150 pre-existing `@typescript-eslint/no-unsafe-*`/`unbound-method` errors in Phase 01/02 test files and `channels.service.ts`. Out of Phase 03 scope (not mixed into this work); suggested as a separate cleanup task.
+- **Jest open handles (pre-existing):** at baseline `npm test` never exited ("Jest did not exit one second after…"); after the Phase 03 fixes the final runs exited normally, but `--detectOpenHandles` was not investigated.
+- **Worker crash window:** if the worker dies after the final failed attempt but before the `failed` handler persists `failed`, the video stays `processing` with its job in the failed set; `reprocess` only accepts `failed`, so recovery needs a manual DB update. A watchdog for stale `processing` rows was not part of the plan.
+- **MinIO image:** official `minio/minio`/`minio/mc` images are no longer publicly pullable; the stack pins the frozen `bitnamilegacy` builds (MinIO 2025-07).
+- **Streaming bandwidth:** playback/download traverse the API by decision (TD-08); a presigned-redirect optimization remains possible behind the same routes.
+- **Branch not pushed:** `dev` was fast-forwarded/merged locally and `feature/phase-03-videos` exists only locally.
